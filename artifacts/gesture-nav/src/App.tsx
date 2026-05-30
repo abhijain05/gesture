@@ -14,6 +14,7 @@ import Dashboard from "@/pages/Dashboard";
 import Reports from "@/pages/Reports";
 import Analytics from "@/pages/Analytics";
 import Settings from "@/pages/Settings";
+import Paint from "@/pages/Paint";
 import NotFound from "@/pages/not-found";
 
 function AppLayout() {
@@ -59,6 +60,7 @@ function AppLayout() {
             <Route path="/reports" component={Reports} />
             <Route path="/analytics" component={Analytics} />
             <Route path="/settings" component={Settings} />
+            <Route path="/paint" component={Paint} />
             <Route component={NotFound} />
           </Switch>
         </AnimatePresence>

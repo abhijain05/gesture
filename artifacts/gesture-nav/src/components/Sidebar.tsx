@@ -7,6 +7,7 @@ import {
   FileBarChart,
   BarChart3,
   Settings,
+  Paintbrush,
 } from "lucide-react";
 
 const NAV_ITEMS = [
@@ -15,6 +16,7 @@ const NAV_ITEMS = [
   { id: "reports", path: "/reports", label: "Reports", Icon: FileBarChart },
   { id: "analytics", path: "/analytics", label: "Analytics", Icon: BarChart3 },
   { id: "settings", path: "/settings", label: "Settings", Icon: Settings },
+  { id: "paint", path: "/paint", label: "Paint", Icon: Paintbrush },
 ];
 
 export function Sidebar() {
