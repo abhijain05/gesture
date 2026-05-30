@@ -5,6 +5,17 @@ import { detectGesture } from "./useGestureRecognition";
 
 type TrackingStatus = "idle" | "loading" | "ready" | "error";
 
+interface TrackingState {
+  handLandmarker: HandLandmarker | null;
+  raf: number | null;
+  lastDetectTime: number;
+  fpsTimestamps: number[];
+  gestureBuffer: string[];
+  smoothCursor: { x: number; y: number } | null;
+  prevTwoFingerY: number | null;
+  isRunning: boolean;
+}
+
 function findScrollContainer(): Element | null {
   const divs = Array.from(document.querySelectorAll("div"));
   for (const el of divs) {
@@ -26,6 +37,19 @@ export interface HandTrackingResult {
   stopTracking: () => void;
 }
 
+const WASM_CDN = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm";
+const MODEL_URL =
+  "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task";
+
+const CONNECTIONS: [number, number][] = [
+  [0, 1], [1, 2], [2, 3], [3, 4],
+  [0, 5], [5, 6], [6, 7], [7, 8],
+  [0, 9], [9, 10], [10, 11], [11, 12],
+  [0, 13], [13, 14], [14, 15], [15, 16],
+  [0, 17], [17, 18], [18, 19], [19, 20],
+  [5, 9], [9, 13], [13, 17],
+];
+
 export function useHandTracking(
   videoRef: React.RefObject<HTMLVideoElement>,
   canvasRef: React.RefObject<HTMLCanvasElement>
@@ -34,38 +58,33 @@ export function useHandTracking(
   const [status, setStatus] = useState<TrackingStatus>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const handLandmarkerRef = useRef<HandLandmarker | null>(null);
-  const rafRef = useRef<number | null>(null);
-  const lastDetectTimeRef = useRef<number>(0);
-  const fpsTimestampsRef = useRef<number[]>([]);
-  const gestureBufferRef = useRef<string[]>([]);
-  const smoothCursorRef = useRef<{ x: number; y: number } | null>(null);
-  const prevTwoFingerYRef = useRef<number | null>(null);
-  const isRunningRef = useRef(false);
-
-  const WASM_CDN = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm";
-  const MODEL_URL =
-    "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task";
+  // Single consolidated ref bag — adding new state never changes hook count
+  const s = useRef<TrackingState>({
+    handLandmarker: null,
+    raf: null,
+    lastDetectTime: 0,
+    fpsTimestamps: [],
+    gestureBuffer: [],
+    smoothCursor: null,
+    prevTwoFingerY: null,
+    isRunning: false,
+  });
 
   const initMediaPipe = useCallback(async () => {
     try {
       setStatus("loading");
       const vision = await FilesetResolver.forVisionTasks(WASM_CDN);
       const handLandmarker = await HandLandmarker.createFromOptions(vision, {
-        baseOptions: {
-          modelAssetPath: MODEL_URL,
-          delegate: "CPU",
-        },
+        baseOptions: { modelAssetPath: MODEL_URL, delegate: "CPU" },
         runningMode: "VIDEO",
         numHands: 1,
         minHandDetectionConfidence: 0.5,
         minHandPresenceConfidence: 0.5,
         minTrackingConfidence: 0.5,
       });
-      handLandmarkerRef.current = handLandmarker;
+      s.current.handLandmarker = handLandmarker;
       setStatus("ready");
     } catch (err) {
-      console.error("MediaPipe init error:", err);
       setStatus("error");
       setErrorMessage(String(err));
     }
@@ -74,21 +93,19 @@ export function useHandTracking(
   useEffect(() => {
     initMediaPipe();
     return () => {
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
-      handLandmarkerRef.current?.close();
+      if (s.current.raf) cancelAnimationFrame(s.current.raf);
+      s.current.handLandmarker?.close();
     };
   }, [initMediaPipe]);
 
   const computeFps = useCallback((now: number) => {
-    fpsTimestampsRef.current.push(now);
-    fpsTimestampsRef.current = fpsTimestampsRef.current.filter(
-      (t) => now - t < 1000
-    );
-    return fpsTimestampsRef.current.length;
+    s.current.fpsTimestamps.push(now);
+    s.current.fpsTimestamps = s.current.fpsTimestamps.filter((t) => now - t < 1000);
+    return s.current.fpsTimestamps.length;
   }, []);
 
   const smoothGesture = useCallback((detected: string): string => {
-    const buf = gestureBufferRef.current;
+    const buf = s.current.gestureBuffer;
     buf.push(detected);
     if (buf.length > 3) buf.shift();
     const counts: Record<string, number> = {};
@@ -103,17 +120,7 @@ export function useHandTracking(
 
   const drawLandmarks = useCallback(
     (ctx: CanvasRenderingContext2D, landmarks: NormalizedLandmark[], width: number, height: number) => {
-      const CONNECTIONS: [number, number][] = [
-        [0, 1], [1, 2], [2, 3], [3, 4],
-        [0, 5], [5, 6], [6, 7], [7, 8],
-        [0, 9], [9, 10], [10, 11], [11, 12],
-        [0, 13], [13, 14], [14, 15], [15, 16],
-        [0, 17], [17, 18], [18, 19], [19, 20],
-        [5, 9], [9, 13], [13, 17],
-      ];
-
       ctx.clearRect(0, 0, width, height);
-
       ctx.strokeStyle = "rgba(0, 212, 255, 0.7)";
       ctx.lineWidth = 1.5;
       for (const [a, b] of CONNECTIONS) {
@@ -125,7 +132,6 @@ export function useHandTracking(
         ctx.lineTo((1 - lb.x) * width, lb.y * height);
         ctx.stroke();
       }
-
       for (const lm of landmarks) {
         const x = (1 - lm.x) * width;
         const y = lm.y * height;
@@ -142,22 +148,22 @@ export function useHandTracking(
   );
 
   const detect = useCallback(() => {
-    if (!isRunningRef.current) return;
+    if (!s.current.isRunning) return;
     const video = videoRef.current;
     const canvas = canvasRef.current;
-    const landmarker = handLandmarkerRef.current;
+    const landmarker = s.current.handLandmarker;
 
     if (!video || !canvas || !landmarker || video.readyState < 2) {
-      rafRef.current = requestAnimationFrame(detect);
+      s.current.raf = requestAnimationFrame(detect);
       return;
     }
 
     const now = performance.now();
-    if (now - lastDetectTimeRef.current < 16) {
-      rafRef.current = requestAnimationFrame(detect);
+    if (now - s.current.lastDetectTime < 16) {
+      s.current.raf = requestAnimationFrame(detect);
       return;
     }
-    lastDetectTimeRef.current = now;
+    s.current.lastDetectTime = now;
 
     const results = landmarker.detectForVideo(video, now);
     const fps = computeFps(now);
@@ -173,43 +179,41 @@ export function useHandTracking(
 
       const { gesture, confidence } = detectGesture(landmarks, gestureSettings.sensitivity);
       const smoothed = smoothGesture(gesture);
+
+      // --- Cursor smoothing (POINT_FINGER) ---
       const indexTip = landmarks[8];
       let cursorPos: { x: number; y: number } | null = null;
       if (smoothed === "POINT_FINGER" && indexTip) {
         const raw = { x: (1 - indexTip.x) * window.innerWidth, y: indexTip.y * window.innerHeight };
-        const prev = smoothCursorRef.current;
+        const prev = s.current.smoothCursor;
         const alpha = 0.3;
         if (!prev) {
           cursorPos = raw;
         } else {
           const ex = prev.x + alpha * (raw.x - prev.x);
           const ey = prev.y + alpha * (raw.y - prev.y);
-          const dist = Math.sqrt((ex - prev.x) ** 2 + (ey - prev.y) ** 2);
-          // ignore sub-2px trembles — cursor stays locked while hand is nearly still
-          cursorPos = dist < 2 ? prev : { x: ex, y: ey };
+          const d = Math.sqrt((ex - prev.x) ** 2 + (ey - prev.y) ** 2);
+          cursorPos = d < 2 ? prev : { x: ex, y: ey };
         }
-        smoothCursorRef.current = cursorPos;
+        s.current.smoothCursor = cursorPos;
       } else {
-        smoothCursorRef.current = null;
+        s.current.smoothCursor = null;
       }
 
+      // --- Motion-based scroll (TWO_FINGER) ---
       if (smoothed === "TWO_FINGER" && gestureSettings.twoFingerEnabled) {
-        const indexY = landmarks[8].y;
-        const middleY = landmarks[12].y;
-        const currentY = (indexY + middleY) / 2;
-        const prevY = prevTwoFingerYRef.current;
+        const currentY = (landmarks[8].y + landmarks[12].y) / 2;
+        const prevY = s.current.prevTwoFingerY;
         if (prevY !== null) {
           const deltaY = currentY - prevY;
-          const deadZone = 0.003;
-          if (Math.abs(deltaY) > deadZone) {
-            const scrollPx = deltaY * window.innerHeight * 5;
+          if (Math.abs(deltaY) > 0.003) {
             const scrollEl = findScrollContainer();
-            scrollEl?.scrollBy({ top: scrollPx, behavior: "instant" as ScrollBehavior });
+            scrollEl?.scrollBy({ top: deltaY * window.innerHeight * 5, behavior: "instant" as ScrollBehavior });
           }
         }
-        prevTwoFingerYRef.current = currentY;
+        s.current.prevTwoFingerY = currentY;
       } else {
-        prevTwoFingerYRef.current = null;
+        s.current.prevTwoFingerY = null;
       }
 
       setGestureState({
@@ -223,6 +227,8 @@ export function useHandTracking(
     } else {
       if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
       const smoothed = smoothGesture("NONE");
+      s.current.smoothCursor = null;
+      s.current.prevTwoFingerY = null;
       setGestureState({
         currentGesture: smoothed as any,
         confidence: 0,
@@ -233,20 +239,20 @@ export function useHandTracking(
       });
     }
 
-    rafRef.current = requestAnimationFrame(detect);
-  }, [videoRef, canvasRef, computeFps, drawLandmarks, smoothGesture, setGestureState, gestureSettings.sensitivity]);
+    s.current.raf = requestAnimationFrame(detect);
+  }, [videoRef, canvasRef, computeFps, drawLandmarks, smoothGesture, setGestureState, gestureSettings.sensitivity, gestureSettings.twoFingerEnabled]);
 
   const startTracking = useCallback(async () => {
-    if (isRunningRef.current) return;
+    if (s.current.isRunning) return;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
       const video = videoRef.current;
       if (!video) return;
       video.srcObject = stream;
       await video.play();
-      isRunningRef.current = true;
+      s.current.isRunning = true;
       setGestureState({ isTracking: true });
-      rafRef.current = requestAnimationFrame(detect);
+      s.current.raf = requestAnimationFrame(detect);
     } catch (err) {
       setStatus("error");
       setErrorMessage("Camera permission denied or not available");
@@ -254,8 +260,8 @@ export function useHandTracking(
   }, [detect, videoRef, setGestureState]);
 
   const stopTracking = useCallback(() => {
-    isRunningRef.current = false;
-    if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    s.current.isRunning = false;
+    if (s.current.raf) cancelAnimationFrame(s.current.raf);
     const video = videoRef.current;
     if (video?.srcObject) {
       const stream = video.srcObject as MediaStream;
