@@ -1,6 +1,6 @@
 import type { NormalizedLandmark } from "@mediapipe/tasks-vision";
 
-export type GestureType = "POINT_FINGER" | "PINCH" | "OPEN_PALM" | "NONE";
+export type GestureType = "POINT_FINGER" | "PINCH" | "OPEN_PALM" | "TWO_FINGER" | "NONE";
 
 function dist(a: NormalizedLandmark, b: NormalizedLandmark): number {
   const dx = a.x - b.x;
@@ -50,15 +50,19 @@ export function detectGesture(
   const pinchDist = dist(thumbTip, indexTip);
   const pinchThreshold = 0.06 * (1 - sensitivity * 0.3);
 
-  if (pinchDist < pinchThreshold) {
-    const confidence = Math.min(1, (pinchThreshold - pinchDist) / pinchThreshold);
-    return { gesture: "PINCH", confidence };
-  }
-
   const indexExtended = isFingerExtended(indexTip, indexPip, indexMcp);
+  const middleExtended = isFingerExtended(middleTip, middlePip, middleMcp);
   const middleCurled = isFingerCurled(middleTip, middlePip);
   const ringCurled = isFingerCurled(ringTip, ringPip);
   const pinkyCurled = isFingerCurled(pinkyTip, pinkyPip);
+
+  // PINCH: if middle finger is also extended (like in a peace sign) require a
+  // much tighter pinch to avoid false-triggering during TWO_FINGER scrolling.
+  const effectivePinchThreshold = middleExtended ? pinchThreshold * 0.55 : pinchThreshold;
+  if (pinchDist < effectivePinchThreshold) {
+    const confidence = Math.min(1, (effectivePinchThreshold - pinchDist) / effectivePinchThreshold);
+    return { gesture: "PINCH", confidence };
+  }
 
   if (indexExtended && middleCurled && ringCurled && pinkyCurled) {
     const indexRaise = indexPip.y - indexTip.y;
@@ -69,8 +73,9 @@ export function detectGesture(
     }
   }
 
-  const middleExtended = isFingerExtended(middleTip, middlePip, middleMcp);
-  if (indexExtended && middleExtended && ringCurled && pinkyCurled) {
+  // TWO_FINGER: peace sign. Thumb must be clearly away from index (not pinching).
+  const clearThreshold = pinchThreshold * 1.6;
+  if (indexExtended && middleExtended && ringCurled && pinkyCurled && pinchDist > clearThreshold) {
     const raise = (indexPip.y - indexTip.y + middlePip.y - middleTip.y) / 2;
     const confidence = Math.min(1, raise * 4);
     if (confidence > 0.3) {
