@@ -40,6 +40,7 @@ export function useHandTracking(
   const fpsTimestampsRef = useRef<number[]>([]);
   const gestureBufferRef = useRef<string[]>([]);
   const smoothCursorRef = useRef<{ x: number; y: number } | null>(null);
+  const prevTwoFingerYRef = useRef<number | null>(null);
   const isRunningRef = useRef(false);
 
   const WASM_CDN = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm";
@@ -187,14 +188,22 @@ export function useHandTracking(
       }
 
       if (smoothed === "TWO_FINGER" && gestureSettings.twoFingerEnabled) {
-        const wristY = landmarks[0].y;
-        const delta = wristY - 0.5;
-        const deadZone = 0.1;
-        if (Math.abs(delta) > deadZone) {
-          const speed = Math.sign(delta) * (Math.abs(delta) - deadZone) * 700;
-          const scrollEl = findScrollContainer();
-          scrollEl?.scrollBy({ top: speed / 60, behavior: "instant" as ScrollBehavior });
+        const indexY = landmarks[8].y;
+        const middleY = landmarks[12].y;
+        const currentY = (indexY + middleY) / 2;
+        const prevY = prevTwoFingerYRef.current;
+        if (prevY !== null) {
+          const deltaY = currentY - prevY;
+          const deadZone = 0.003;
+          if (Math.abs(deltaY) > deadZone) {
+            const scrollPx = deltaY * window.innerHeight * 5;
+            const scrollEl = findScrollContainer();
+            scrollEl?.scrollBy({ top: scrollPx, behavior: "instant" as ScrollBehavior });
+          }
         }
+        prevTwoFingerYRef.current = currentY;
+      } else {
+        prevTwoFingerYRef.current = null;
       }
 
       setGestureState({
