@@ -143,6 +143,54 @@ const CURSOR_CSS = `
   0%, 100% { opacity: 1; }
   50% { opacity: 0.3; }
 }
+.gcore-scroll-indicator {
+  position: fixed;
+  width: 44px;
+  height: 44px;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 2147483647;
+  opacity: 0;
+  transition: opacity 0.15s;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+}
+.gcore-scroll-indicator--visible { opacity: 1; }
+.gcore-scroll-indicator-inner {
+  background: rgba(0, 112, 242, 0.85);
+  border-radius: 50%;
+  width: 38px;
+  height: 38px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  box-shadow: 0 0 0 3px rgba(0,112,242,0.25), 0 3px 12px rgba(0,0,0,0.4);
+}
+.gcore-scroll-arrow {
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+}
+.gcore-scroll-arrow--up { border-bottom: 6px solid rgba(255,255,255,0.9); }
+.gcore-scroll-arrow--down { border-top: 6px solid rgba(255,255,255,0.9); }
+.gcore-scroll-label {
+  position: absolute;
+  bottom: -18px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 10px;
+  font-weight: 700;
+  color: rgba(0,112,242,0.95);
+  white-space: nowrap;
+  letter-spacing: 0.04em;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+}
 `;
 
 export class CursorOverlay {
@@ -152,6 +200,7 @@ export class CursorOverlay {
   private dwellRing: SVGSVGElement;
   private webcamContainer: HTMLDivElement | null = null;
   private badge: HTMLDivElement;
+  private scrollIndicator: HTMLDivElement;
   private styleEl: HTMLStyleElement;
   private visible = false;
 
@@ -197,8 +246,19 @@ export class CursorOverlay {
     this.badge.className = "gcore-badge";
     this.badge.innerHTML = `<span class="gcore-badge-dot"></span>Gesture Control Active`;
 
+    this.scrollIndicator = document.createElement("div");
+    this.scrollIndicator.className = "gcore-scroll-indicator";
+    this.scrollIndicator.innerHTML = `
+      <div class="gcore-scroll-indicator-inner">
+        <div class="gcore-scroll-arrow gcore-scroll-arrow--up"></div>
+        <div class="gcore-scroll-arrow gcore-scroll-arrow--down"></div>
+      </div>
+      <span class="gcore-scroll-label">SCROLL</span>
+    `;
+
     document.body.appendChild(this.overlay);
     document.body.appendChild(this.badge);
+    document.body.appendChild(this.scrollIndicator);
 
     if (showWebcam) this.initWebcam();
   }
@@ -320,9 +380,20 @@ export class CursorOverlay {
     (this.dwellRing as unknown as HTMLElement).style.opacity = progress > 0 ? "1" : "0";
   }
 
+  showScrollIndicator(x: number, y: number): void {
+    this.scrollIndicator.style.left = `${x}px`;
+    this.scrollIndicator.style.top = `${y}px`;
+    this.scrollIndicator.classList.add("gcore-scroll-indicator--visible");
+  }
+
+  hideScrollIndicator(): void {
+    this.scrollIndicator.classList.remove("gcore-scroll-indicator--visible");
+  }
+
   destroy(): void {
     this.overlay.remove();
     this.badge.remove();
+    this.scrollIndicator.remove();
     this.webcamContainer?.remove();
     this.styleEl.remove();
   }

@@ -178,7 +178,26 @@ export class GestureEngine {
     return bestCount >= 2 ? best : "NONE";
   }
 
-  private findScrollContainer(): Element | null {
+  private findScrollContainer(x?: number, y?: number): Element | null {
+    // If we know hand position, walk up the DOM from that point to the nearest scrollable ancestor
+    if (x !== undefined && y !== undefined) {
+      let el = document.elementFromPoint(x, y);
+      while (el && el !== document.documentElement) {
+        const s = getComputedStyle(el);
+        if (
+          (s.overflowY === "auto" || s.overflowY === "scroll") &&
+          el.scrollHeight > el.clientHeight + 10
+        ) {
+          return el;
+        }
+        el = el.parentElement;
+      }
+      // check body / document scroll as fallback
+      if (document.documentElement.scrollHeight > window.innerHeight + 10) {
+        return document.documentElement;
+      }
+    }
+    // Blind fallback: first scrollable element in DOM order
     for (const el of Array.from(document.querySelectorAll("*"))) {
       const s = getComputedStyle(el);
       if ((s.overflowY === "auto" || s.overflowY === "scroll") &&
@@ -261,17 +280,22 @@ export class GestureEngine {
 
     if (smoothed === "TWO_FINGER" && this.settings.twoFingerEnabled) {
       const currentY = (landmarks[8].y + landmarks[12].y) / 2;
+      // Mirror X to match screen coords (same as cursor position logic)
+      const handX = (1 - (landmarks[8].x + landmarks[12].x) / 2) * window.innerWidth;
+      const handY = currentY * window.innerHeight;
+      this.overlay?.showScrollIndicator(handX, handY);
       if (this.prevTwoFingerY !== null) {
         const deltaY = (currentY - this.prevTwoFingerY) * window.innerHeight * 5;
         if (Math.abs(deltaY) > 1) {
           this.emit("twofinger", { deltaY });
-          const scrollEl = this.findScrollContainer();
+          const scrollEl = this.findScrollContainer(handX, handY);
           scrollEl?.scrollBy({ top: deltaY, behavior: "instant" as ScrollBehavior });
         }
       }
       this.prevTwoFingerY = currentY;
     } else {
       this.prevTwoFingerY = null;
+      this.overlay?.hideScrollIndicator();
     }
 
     this.state = {
