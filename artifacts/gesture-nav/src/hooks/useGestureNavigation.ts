@@ -12,9 +12,9 @@ const NAV_ITEMS = [
 ];
 
 const NAV_ITEM_ELEMENTS_SELECTOR = "[data-nav-id]";
-const HOVER_DWELL_MS = 800;
-const PINCH_DEBOUNCE_MS = 1200;
-const PALM_DEBOUNCE_MS = 1500;
+const HOVER_DWELL_MS = 450;
+const PINCH_DEBOUNCE_MS = 800;
+const PALM_DEBOUNCE_MS = 700;
 
 export function useGestureNavigation() {
   const { currentGesture, cursorPosition, hoveredNavItem, setGestureState, gestureSettings } =

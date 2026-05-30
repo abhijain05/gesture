@@ -25,6 +25,7 @@ export function useHandTracking(
   const lastDetectTimeRef = useRef<number>(0);
   const fpsTimestampsRef = useRef<number[]>([]);
   const gestureBufferRef = useRef<string[]>([]);
+  const smoothCursorRef = useRef<{ x: number; y: number } | null>(null);
   const isRunningRef = useRef(false);
 
   const WASM_CDN = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm";
@@ -74,7 +75,7 @@ export function useHandTracking(
   const smoothGesture = useCallback((detected: string): string => {
     const buf = gestureBufferRef.current;
     buf.push(detected);
-    if (buf.length > 5) buf.shift();
+    if (buf.length > 3) buf.shift();
     const counts: Record<string, number> = {};
     for (const g of buf) counts[g] = (counts[g] || 0) + 1;
     let best = "NONE";
@@ -82,7 +83,7 @@ export function useHandTracking(
     for (const [g, c] of Object.entries(counts)) {
       if (c > bestCount) { best = g; bestCount = c; }
     }
-    return bestCount >= 3 ? best : "NONE";
+    return bestCount >= 2 ? best : "NONE";
   }, []);
 
   const drawLandmarks = useCallback(
@@ -137,7 +138,7 @@ export function useHandTracking(
     }
 
     const now = performance.now();
-    if (now - lastDetectTimeRef.current < 33) {
+    if (now - lastDetectTimeRef.current < 16) {
       rafRef.current = requestAnimationFrame(detect);
       return;
     }
@@ -158,9 +159,18 @@ export function useHandTracking(
       const { gesture, confidence } = detectGesture(landmarks, gestureSettings.sensitivity);
       const smoothed = smoothGesture(gesture);
       const indexTip = landmarks[8];
-      const cursorPos = smoothed === "POINT_FINGER" && indexTip
-        ? { x: (1 - indexTip.x) * window.innerWidth, y: indexTip.y * window.innerHeight }
-        : null;
+      let cursorPos: { x: number; y: number } | null = null;
+      if (smoothed === "POINT_FINGER" && indexTip) {
+        const raw = { x: (1 - indexTip.x) * window.innerWidth, y: indexTip.y * window.innerHeight };
+        const prev = smoothCursorRef.current;
+        const alpha = 0.5;
+        cursorPos = prev
+          ? { x: prev.x + alpha * (raw.x - prev.x), y: prev.y + alpha * (raw.y - prev.y) }
+          : raw;
+        smoothCursorRef.current = cursorPos;
+      } else {
+        smoothCursorRef.current = null;
+      }
 
       setGestureState({
         currentGesture: smoothed as any,
