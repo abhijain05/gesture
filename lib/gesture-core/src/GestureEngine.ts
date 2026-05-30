@@ -45,6 +45,7 @@ export class GestureEngine {
   private lastDwellTarget: Element | null = null;
   private lastPinchTime = 0;
   private palmHoldStart: number | null = null;
+  private palmFireCooldownUntil = 0;
   private previousGesture: GestureType = "NONE";
 
   private state: GestureState = {
@@ -272,19 +273,40 @@ export class GestureEngine {
 
     if (smoothed === "OPEN_PALM" && this.settings.openPalmEnabled) {
       const now = Date.now();
-      if (this.palmHoldStart === null) this.palmHoldStart = now;
-      const elapsed = now - this.palmHoldStart;
-      const progress = Math.min(1, elapsed / this.settings.palmHoldMs);
-      const secondsLeft = Math.ceil((this.settings.palmHoldMs - elapsed) / 1000);
-      this.emit("palmProgress", { progress, secondsLeft });
-      this.overlay?.showPalmCountdown(progress, secondsLeft);
-      if (progress >= 1) {
+
+      // Ignore palm during post-fire cooldown so popup doesn't reappear immediately
+      if (now < this.palmFireCooldownUntil) {
         this.palmHoldStart = null;
-        this.overlay?.hidePalmCountdown();
-        if (this.settings.audioFeedback) playSound("home");
-        this.emit("palm", {});
+      } else {
+        const SILENT_MS = 3000;          // 3s silent phase before popup appears
+        const COUNTDOWN_MS = this.settings.palmHoldMs; // 5s visible countdown
+
+        if (this.palmHoldStart === null) this.palmHoldStart = now;
+        const elapsed = now - this.palmHoldStart;
+
+        if (elapsed < SILENT_MS) {
+          // Silent phase — popup must stay hidden (user may have just flashed palm)
+          this.overlay?.hidePalmCountdown();
+        } else {
+          // Countdown phase — show popup and count down
+          const countdownElapsed = elapsed - SILENT_MS;
+          const progress = Math.min(1, countdownElapsed / COUNTDOWN_MS);
+          const secondsLeft = Math.ceil((COUNTDOWN_MS - countdownElapsed) / 1000);
+          this.emit("palmProgress", { progress, secondsLeft });
+          this.overlay?.showPalmCountdown(progress, secondsLeft);
+
+          if (progress >= 1) {
+            // Fire!
+            this.palmHoldStart = null;
+            this.palmFireCooldownUntil = now + 4000; // 4s cooldown before palm can fire again
+            this.overlay?.hidePalmCountdown();
+            if (this.settings.audioFeedback) playSound("home");
+            this.emit("palm", {});
+          }
+        }
       }
     } else {
+      // Palm removed — reset immediately, hide popup right away
       if (this.palmHoldStart !== null) {
         this.palmHoldStart = null;
         this.overlay?.hidePalmCountdown();
