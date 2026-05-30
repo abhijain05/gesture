@@ -9,6 +9,7 @@ const NAV_ITEMS = [
   { id: "reports", path: "/reports" },
   { id: "analytics", path: "/analytics" },
   { id: "settings", path: "/settings" },
+  { id: "paint", path: "/paint" },
 ];
 
 const NAV_ITEM_ELEMENTS_SELECTOR = "[data-nav-id]";
@@ -96,11 +97,35 @@ export function useGestureNavigation() {
     if (now - lastPinchRef.current < PINCH_DEBOUNCE_MS) return;
     lastPinchRef.current = now;
 
+    if (!cursorPosition) return;
+
+    // Walk up DOM from cursor position to find the nearest clickable element
+    const findClickable = (x: number, y: number): HTMLElement | null => {
+      let el = document.elementFromPoint(x, y) as HTMLElement | null;
+      while (el && el !== document.body) {
+        const tag = el.tagName.toLowerCase();
+        const role = el.getAttribute("role");
+        if (tag === "button" || tag === "a" || role === "button" || role === "link") {
+          return el;
+        }
+        el = el.parentElement;
+      }
+      return null;
+    };
+
+    const clickable = findClickable(cursorPosition.x, cursorPosition.y);
+    if (clickable) {
+      playGestureSound("select");
+      clickable.click();
+      return;
+    }
+
+    // Fallback: nav item by hovered state
     if (hoveredNavItem) {
       const item = NAV_ITEMS.find((n) => n.id === hoveredNavItem);
       if (item) navigateTo(item.path);
     }
-  }, [currentGesture, hoveredNavItem, navigateTo, gestureSettings.pinchEnabled]);
+  }, [currentGesture, cursorPosition, hoveredNavItem, navigateTo, gestureSettings.pinchEnabled]);
 
   useEffect(() => {
     if (!gestureSettings.openPalmEnabled) return;
