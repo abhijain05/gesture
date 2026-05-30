@@ -7,6 +7,7 @@ export interface GestureSettings {
   twoFingerEnabled: boolean;
   sensitivity: number;
   dwellTimeMs: number;
+  palmHoldMs: number;
   audioFeedback: boolean;
   showCursor: boolean;
   showWebcam: boolean;
@@ -16,6 +17,7 @@ export interface GestureEngineOptions {
   container?: HTMLElement;
   sensitivity?: number;
   dwellTimeMs?: number;
+  palmHoldMs?: number;
   audioFeedback?: boolean;
   showCursor?: boolean;
   showWebcam?: boolean;
@@ -37,6 +39,7 @@ export type GestureEventMap = {
   cursor: CustomEvent<{ x: number; y: number }>;
   pinch: CustomEvent<{ x: number; y: number }>;
   palm: CustomEvent<Record<string, never>>;
+  palmProgress: CustomEvent<{ progress: number; secondsLeft: number }>;
   twofinger: CustomEvent<{ deltaY: number; deltaX: number }>;
   dwell: CustomEvent<{ x: number; y: number; target: Element | null; progress: number }>;
 };

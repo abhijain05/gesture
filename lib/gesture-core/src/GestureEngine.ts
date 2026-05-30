@@ -20,13 +20,13 @@ const DEFAULT_SETTINGS: GestureSettings = {
   twoFingerEnabled: true,
   sensitivity: 0.6,
   dwellTimeMs: 600,
+  palmHoldMs: 5000,
   audioFeedback: true,
   showCursor: true,
   showWebcam: true,
 };
 
 const PINCH_DEBOUNCE_MS = 800;
-const PALM_DEBOUNCE_MS = 700;
 
 export class GestureEngine {
   private settings: GestureSettings;
@@ -44,7 +44,7 @@ export class GestureEngine {
   private dwellStart: number | null = null;
   private lastDwellTarget: Element | null = null;
   private lastPinchTime = 0;
-  private lastPalmTime = 0;
+  private palmHoldStart: number | null = null;
   private previousGesture: GestureType = "NONE";
 
   private state: GestureState = {
@@ -67,6 +67,7 @@ export class GestureEngine {
       showCursor: options.showCursor ?? DEFAULT_SETTINGS.showCursor,
       showWebcam: options.showWebcam ?? DEFAULT_SETTINGS.showWebcam,
     };
+    this.settings.palmHoldMs = options.palmHoldMs ?? DEFAULT_SETTINGS.palmHoldMs;
     this.useVirtualKeyboard = options.virtualKeyboard ?? false;
 
     this.video = document.createElement("video");
@@ -271,10 +272,22 @@ export class GestureEngine {
 
     if (smoothed === "OPEN_PALM" && this.settings.openPalmEnabled) {
       const now = Date.now();
-      if (now - this.lastPalmTime > PALM_DEBOUNCE_MS) {
-        this.lastPalmTime = now;
+      if (this.palmHoldStart === null) this.palmHoldStart = now;
+      const elapsed = now - this.palmHoldStart;
+      const progress = Math.min(1, elapsed / this.settings.palmHoldMs);
+      const secondsLeft = Math.ceil((this.settings.palmHoldMs - elapsed) / 1000);
+      this.emit("palmProgress", { progress, secondsLeft });
+      this.overlay?.showPalmCountdown(progress, secondsLeft);
+      if (progress >= 1) {
+        this.palmHoldStart = null;
+        this.overlay?.hidePalmCountdown();
         if (this.settings.audioFeedback) playSound("home");
         this.emit("palm", {});
+      }
+    } else {
+      if (this.palmHoldStart !== null) {
+        this.palmHoldStart = null;
+        this.overlay?.hidePalmCountdown();
       }
     }
 

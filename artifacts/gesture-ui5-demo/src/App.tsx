@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useGestureEngine } from "@/hooks/useGestureEngine";
 import Overview from "@/pages/Overview";
 import SalesOrders from "@/pages/SalesOrders";
@@ -25,6 +25,12 @@ const GESTURE_LABEL: Record<string, string> = {
 export default function App() {
   const [page, setPage] = useState<Page>("overview");
   const { gestureState, status } = useGestureEngine(true);
+
+  useEffect(() => {
+    const handler = () => setPage("overview");
+    document.addEventListener("gesture:palm", handler);
+    return () => document.removeEventListener("gesture:palm", handler);
+  }, []);
 
   const gesture = gestureState.currentGesture;
   const isActive = status === "ready";

@@ -192,6 +192,74 @@ const CURSOR_CSS = `
   letter-spacing: 0.04em;
   text-shadow: 0 1px 3px rgba(0,0,0,0.5);
 }
+.gcore-palm-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483646;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+.gcore-palm-overlay--visible { opacity: 1; }
+.gcore-palm-card {
+  background: rgba(10, 20, 35, 0.92);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 2px solid rgba(16, 126, 62, 0.7);
+  border-radius: 20px;
+  padding: 32px 48px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  box-shadow: 0 0 60px rgba(16,126,62,0.25), 0 8px 40px rgba(0,0,0,0.6);
+}
+.gcore-palm-icon {
+  font-size: 52px;
+  line-height: 1;
+  filter: drop-shadow(0 0 12px rgba(16,126,62,0.8));
+  animation: gcore-palm-wave 0.8s ease-in-out infinite alternate;
+}
+@keyframes gcore-palm-wave {
+  from { transform: rotate(-8deg) scale(1); }
+  to   { transform: rotate( 8deg) scale(1.08); }
+}
+.gcore-palm-title {
+  font-family: system-ui, -apple-system, sans-serif;
+  font-size: 18px;
+  font-weight: 700;
+  color: #e2e8f0;
+  letter-spacing: 0.02em;
+}
+.gcore-palm-sub {
+  font-family: system-ui, -apple-system, sans-serif;
+  font-size: 13px;
+  color: #64748b;
+}
+.gcore-palm-ring-wrap {
+  position: relative;
+  width: 80px;
+  height: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.gcore-palm-ring {
+  position: absolute;
+  inset: 0;
+  transform: rotate(-90deg);
+}
+.gcore-palm-countdown {
+  font-family: system-ui, -apple-system, sans-serif;
+  font-size: 32px;
+  font-weight: 900;
+  color: #4ade80;
+  line-height: 1;
+  text-shadow: 0 0 16px rgba(74,222,128,0.6);
+}
 `;
 
 export class CursorOverlay {
@@ -202,6 +270,9 @@ export class CursorOverlay {
   private webcamContainer: HTMLDivElement | null = null;
   private badge: HTMLDivElement;
   private scrollIndicator: HTMLDivElement;
+  private palmOverlay: HTMLDivElement;
+  private palmCountdownEl: HTMLElement | null = null;
+  private palmRingCircle: SVGCircleElement | null = null;
   private styleEl: HTMLStyleElement;
   private visible = false;
 
@@ -257,8 +328,32 @@ export class CursorOverlay {
       <span class="gcore-scroll-label">SCROLL</span>
     `;
 
+    // Palm countdown overlay
+    this.palmOverlay = document.createElement("div");
+    this.palmOverlay.className = "gcore-palm-overlay";
+    const CIRC = 220; // 2π × 35
+    this.palmOverlay.innerHTML = `
+      <div class="gcore-palm-card">
+        <div class="gcore-palm-icon">🖐</div>
+        <div class="gcore-palm-title">Going Home…</div>
+        <div class="gcore-palm-ring-wrap">
+          <svg class="gcore-palm-ring" viewBox="0 0 80 80">
+            <circle cx="40" cy="40" r="35" fill="none" stroke="rgba(74,222,128,0.15)" stroke-width="6"/>
+            <circle class="gcore-palm-progress-circle" cx="40" cy="40" r="35" fill="none"
+              stroke="#4ade80" stroke-width="6" stroke-linecap="round"
+              stroke-dasharray="${CIRC}" stroke-dashoffset="${CIRC}"/>
+          </svg>
+          <span class="gcore-palm-countdown">5</span>
+        </div>
+        <div class="gcore-palm-sub">Keep palm open to navigate home</div>
+      </div>
+    `;
+    this.palmCountdownEl = this.palmOverlay.querySelector(".gcore-palm-countdown");
+    this.palmRingCircle = this.palmOverlay.querySelector(".gcore-palm-progress-circle");
+
     document.body.appendChild(this.overlay);
     document.body.appendChild(this.badge);
+    document.body.appendChild(this.palmOverlay);
     document.body.appendChild(this.scrollIndicator);
 
     if (showWebcam) this.initWebcam();
@@ -381,6 +476,21 @@ export class CursorOverlay {
     (this.dwellRing as unknown as HTMLElement).style.opacity = progress > 0 ? "1" : "0";
   }
 
+  showPalmCountdown(progress: number, secondsLeft: number): void {
+    this.palmOverlay.classList.add("gcore-palm-overlay--visible");
+    if (this.palmCountdownEl) this.palmCountdownEl.textContent = String(secondsLeft);
+    if (this.palmRingCircle) {
+      const CIRC = 220;
+      this.palmRingCircle.setAttribute("stroke-dashoffset", String(CIRC * (1 - progress)));
+    }
+  }
+
+  hidePalmCountdown(): void {
+    this.palmOverlay.classList.remove("gcore-palm-overlay--visible");
+    if (this.palmRingCircle) this.palmRingCircle.setAttribute("stroke-dashoffset", "220");
+    if (this.palmCountdownEl) this.palmCountdownEl.textContent = "5";
+  }
+
   showScrollIndicator(x: number, y: number, direction: "v" | "h" = "v"): void {
     this.scrollIndicator.style.left = `${x}px`;
     this.scrollIndicator.style.top = `${y}px`;
@@ -407,6 +517,7 @@ export class CursorOverlay {
   destroy(): void {
     this.overlay.remove();
     this.badge.remove();
+    this.palmOverlay.remove();
     this.scrollIndicator.remove();
     this.webcamContainer?.remove();
     this.styleEl.remove();
