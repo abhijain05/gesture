@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "Gesture Navigator"
+version = "1.0.0"
+id = "artifacts/gesture-nav"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 22122
+
+[services.development]
+run = "pnpm --filter @workspace/gesture-nav run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/gesture-nav", "run", "build" ]
+publicDir = "artifacts/gesture-nav/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "22122"
+BASE_PATH = "/"
