@@ -69,6 +69,15 @@ export function detectGesture(
     }
   }
 
+  const middleExtended = isFingerExtended(middleTip, middlePip, middleMcp);
+  if (indexExtended && middleExtended && ringCurled && pinkyCurled) {
+    const raise = (indexPip.y - indexTip.y + middlePip.y - middleTip.y) / 2;
+    const confidence = Math.min(1, raise * 4);
+    if (confidence > 0.3) {
+      return { gesture: "TWO_FINGER", confidence };
+    }
+  }
+
   const allExtended = [
     isFingerExtended(indexTip, indexPip, indexMcp),
     isFingerExtended(middleTip, middlePip, middleMcp),

@@ -1,12 +1,13 @@
 import { createContext, useContext, useState, ReactNode } from "react";
 import type { NormalizedLandmark } from "@mediapipe/tasks-vision";
 
-export type GestureType = "POINT_FINGER" | "PINCH" | "OPEN_PALM" | "NONE";
+export type GestureType = "POINT_FINGER" | "PINCH" | "OPEN_PALM" | "TWO_FINGER" | "NONE";
 
 export interface GestureSettings {
   pointFingerEnabled: boolean;
   pinchEnabled: boolean;
   openPalmEnabled: boolean;
+  twoFingerEnabled: boolean;
   sensitivity: number;
 }
 
@@ -27,6 +28,7 @@ const defaultSettings: GestureSettings = {
   pointFingerEnabled: true,
   pinchEnabled: true,
   openPalmEnabled: true,
+  twoFingerEnabled: true,
   sensitivity: 0.6,
 };
 

@@ -10,7 +10,7 @@ const GESTURE_TIPS = [
   {
     icon: "☛",
     title: "Point Finger",
-    desc: "Raise your index finger to move the virtual cursor. Hover over a nav item for 0.8 seconds to navigate.",
+    desc: "Raise your index finger to move the virtual cursor. Hover over a nav item for 0.5 seconds to navigate.",
     color: "#00d4ff",
   },
   {
@@ -18,6 +18,12 @@ const GESTURE_TIPS = [
     title: "Pinch",
     desc: "Bring your thumb and index finger together to select the currently highlighted navigation item.",
     color: "#a855f7",
+  },
+  {
+    icon: "✌",
+    title: "Two Fingers",
+    desc: "Raise your index and middle finger (peace sign). Move your hand up to scroll up, down to scroll down.",
+    color: "#f59e0b",
   },
   {
     icon: "✋",
@@ -28,7 +34,7 @@ const GESTURE_TIPS = [
 ];
 
 const STATUS_CARDS = [
-  { label: "Gestures Active", value: "3", Icon: Zap, color: "#00d4ff" },
+  { label: "Gestures Active", value: "4", Icon: Zap, color: "#00d4ff" },
   { label: "Pages Available", value: "5", Icon: Activity, color: "#a855f7" },
   { label: "Camera Status", value: "Live", Icon: Hand, color: "#22c55e" },
 ];

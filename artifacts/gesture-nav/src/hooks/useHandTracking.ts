@@ -5,6 +5,20 @@ import { detectGesture } from "./useGestureRecognition";
 
 type TrackingStatus = "idle" | "loading" | "ready" | "error";
 
+function findScrollContainer(): Element | null {
+  const divs = Array.from(document.querySelectorAll("div"));
+  for (const el of divs) {
+    const style = window.getComputedStyle(el);
+    if (
+      (style.overflowY === "auto" || style.overflowY === "scroll") &&
+      el.scrollHeight > el.clientHeight + 10
+    ) {
+      return el;
+    }
+  }
+  return null;
+}
+
 export interface HandTrackingResult {
   status: TrackingStatus;
   errorMessage: string | null;
@@ -170,6 +184,17 @@ export function useHandTracking(
         smoothCursorRef.current = cursorPos;
       } else {
         smoothCursorRef.current = null;
+      }
+
+      if (smoothed === "TWO_FINGER" && gestureSettings.twoFingerEnabled) {
+        const wristY = landmarks[0].y;
+        const delta = wristY - 0.5;
+        const deadZone = 0.1;
+        if (Math.abs(delta) > deadZone) {
+          const speed = Math.sign(delta) * (Math.abs(delta) - deadZone) * 700;
+          const scrollEl = findScrollContainer();
+          scrollEl?.scrollBy({ top: speed / 60, behavior: "instant" as ScrollBehavior });
+        }
       }
 
       setGestureState({

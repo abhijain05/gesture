@@ -5,6 +5,7 @@ const GESTURE_LABELS: Record<string, { label: string; color: string; glyph: stri
   POINT_FINGER: { label: "POINT", color: "#00d4ff", glyph: "☛" },
   PINCH: { label: "PINCH", color: "#a855f7", glyph: "✦" },
   OPEN_PALM: { label: "PALM", color: "#22c55e", glyph: "✋" },
+  TWO_FINGER: { label: "SCROLL", color: "#f59e0b", glyph: "✌" },
   NONE: { label: "IDLE", color: "#4b5563", glyph: "○" },
 };
 
