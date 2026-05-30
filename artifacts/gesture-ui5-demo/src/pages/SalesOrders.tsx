@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 
 const ORDERS = [
   { id: "SO-4821", customer: "Acme Corp.", date: "2026-05-28", status: "In Process", amount: "€12,400", items: 4, priority: "High" },
@@ -25,18 +25,53 @@ const PRIORITY_STYLE: Record<string, string> = {
 
 export default function SalesOrders() {
   const [selected, setSelected] = useState<string | null>(ORDERS[0].id);
+  const [search, setSearch] = useState("");
+  const filtered = useMemo(
+    () => ORDERS.filter(
+      (o) =>
+        o.id.toLowerCase().includes(search.toLowerCase()) ||
+        o.customer.toLowerCase().includes(search.toLowerCase())
+    ),
+    [search]
+  );
   const order = ORDERS.find((o) => o.id === selected) ?? ORDERS[0];
 
   return (
     <div style={{ display: "flex", height: "100%", gap: 0 }}>
       <div style={{ width: 340, borderRight: "1px solid #d9d9d9", background: "#fff", overflowY: "auto" }} className="scrollbar-thin">
         <div style={{ padding: "12px 16px", borderBottom: "1px solid #e8e8e8", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <span style={{ fontWeight: 700, fontSize: 14 }}>Sales Orders ({ORDERS.length})</span>
+          <span style={{ fontWeight: 700, fontSize: 14 }}>Sales Orders ({filtered.length})</span>
           <button className="sap-btn sap-btn-primary" style={{ height: 28, fontSize: 12, padding: "0 12px" }} data-gesture-click>
             + New
           </button>
         </div>
-        {ORDERS.map((o) => (
+        <div style={{ padding: "8px 12px", borderBottom: "1px solid #f0f0f0" }}>
+          <input
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="🔍  Search orders or customers…"
+            style={{
+              width: "100%",
+              padding: "7px 10px",
+              border: "1px solid #d9d9d9",
+              borderRadius: 6,
+              fontSize: 13,
+              outline: "none",
+              background: "#fafafa",
+              color: "#1d2d3e",
+              boxSizing: "border-box",
+            }}
+            onFocus={(e) => (e.target.style.borderColor = "#0070f2")}
+            onBlur={(e) => (e.target.style.borderColor = "#d9d9d9")}
+          />
+        </div>
+        {filtered.length === 0 && (
+          <div style={{ padding: "24px 16px", textAlign: "center", color: "#6a6d70", fontSize: 13 }}>
+            No orders match "{search}"
+          </div>
+        )}
+        {filtered.map((o) => (
           <button
             key={o.id}
             data-gesture-dwell

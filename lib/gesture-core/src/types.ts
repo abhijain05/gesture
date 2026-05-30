@@ -19,6 +19,7 @@ export interface GestureEngineOptions {
   audioFeedback?: boolean;
   showCursor?: boolean;
   showWebcam?: boolean;
+  virtualKeyboard?: boolean;
 }
 
 export interface GestureState {

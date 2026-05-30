@@ -26,6 +26,7 @@ export function useGestureEngine(enabled = true) {
       showWebcam: true,
       dwellTimeMs: 700,
       audioFeedback: true,
+      virtualKeyboard: true,
     });
     engineRef.current = engine;
 

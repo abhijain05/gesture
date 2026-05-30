@@ -2,6 +2,7 @@ import type { NormalizedLandmark } from "@mediapipe/tasks-vision";
 import { HandTracker } from "./HandTracker.js";
 import { detectGesture } from "./GestureRecognizer.js";
 import { CursorOverlay } from "./CursorOverlay.js";
+import { VirtualKeyboard } from "./VirtualKeyboard.js";
 import { playSound } from "./AudioFeedback.js";
 import type {
   GestureEngineOptions,
@@ -31,8 +32,10 @@ export class GestureEngine {
   private settings: GestureSettings;
   private tracker: HandTracker | null = null;
   private overlay: CursorOverlay | null = null;
+  private keyboard: VirtualKeyboard | null = null;
   private video: HTMLVideoElement;
   private webcamCanvas: HTMLCanvasElement | null = null;
+  private useVirtualKeyboard: boolean;
 
   private gestureBuffer: GestureType[] = [];
   private smoothCursor: { x: number; y: number } | null = null;
@@ -63,10 +66,15 @@ export class GestureEngine {
       showCursor: options.showCursor ?? DEFAULT_SETTINGS.showCursor,
       showWebcam: options.showWebcam ?? DEFAULT_SETTINGS.showWebcam,
     };
+    this.useVirtualKeyboard = options.virtualKeyboard ?? false;
 
     this.video = document.createElement("video");
     this.video.style.cssText = "position:fixed;opacity:0;pointer-events:none;width:1px;height:1px;top:-9999px;";
     document.body.appendChild(this.video);
+
+    if (this.useVirtualKeyboard) {
+      this.keyboard = new VirtualKeyboard({ dwellTimeMs: this.settings.dwellTimeMs });
+    }
   }
 
   on<K extends GestureEventType>(
@@ -141,6 +149,7 @@ export class GestureEngine {
   destroy(): void {
     this.tracker?.destroy();
     this.overlay?.destroy();
+    this.keyboard?.destroy();
     this.video.remove();
     this.listeners.forEach((set, event) => {
       set.forEach((l) => this.emitter.removeEventListener(event, l));
