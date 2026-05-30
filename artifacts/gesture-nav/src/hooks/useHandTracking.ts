@@ -178,10 +178,16 @@ export function useHandTracking(
       if (smoothed === "POINT_FINGER" && indexTip) {
         const raw = { x: (1 - indexTip.x) * window.innerWidth, y: indexTip.y * window.innerHeight };
         const prev = smoothCursorRef.current;
-        const alpha = 0.5;
-        cursorPos = prev
-          ? { x: prev.x + alpha * (raw.x - prev.x), y: prev.y + alpha * (raw.y - prev.y) }
-          : raw;
+        const alpha = 0.3;
+        if (!prev) {
+          cursorPos = raw;
+        } else {
+          const ex = prev.x + alpha * (raw.x - prev.x);
+          const ey = prev.y + alpha * (raw.y - prev.y);
+          const dist = Math.sqrt((ex - prev.x) ** 2 + (ey - prev.y) ** 2);
+          // ignore sub-2px trembles — cursor stays locked while hand is nearly still
+          cursorPos = dist < 2 ? prev : { x: ex, y: ey };
+        }
         smoothCursorRef.current = cursorPos;
       } else {
         smoothCursorRef.current = null;
