@@ -40,6 +40,7 @@ export class GestureEngine {
   private gestureBuffer: GestureType[] = [];
   private smoothCursor: { x: number; y: number } | null = null;
   private prevTwoFingerY: number | null = null;
+  private prevTwoFingerX: number | null = null;
   private dwellStart: number | null = null;
   private lastDwellTarget: Element | null = null;
   private lastPinchTime = 0;
@@ -178,30 +179,29 @@ export class GestureEngine {
     return bestCount >= 2 ? best : "NONE";
   }
 
-  private findScrollContainer(x?: number, y?: number): Element | null {
-    // If we know hand position, walk up the DOM from that point to the nearest scrollable ancestor
+  private findScrollContainer(x?: number, y?: number, axis: "y" | "x" = "y"): Element | null {
+    const canScrollY = (el: Element) => {
+      const s = getComputedStyle(el);
+      return (s.overflowY === "auto" || s.overflowY === "scroll") && el.scrollHeight > el.clientHeight + 10;
+    };
+    const canScrollX = (el: Element) => {
+      const s = getComputedStyle(el);
+      return (s.overflowX === "auto" || s.overflowX === "scroll") && el.scrollWidth > el.clientWidth + 10;
+    };
+    const check = axis === "y" ? canScrollY : canScrollX;
+
     if (x !== undefined && y !== undefined) {
       let el = document.elementFromPoint(x, y);
       while (el && el !== document.documentElement) {
-        const s = getComputedStyle(el);
-        if (
-          (s.overflowY === "auto" || s.overflowY === "scroll") &&
-          el.scrollHeight > el.clientHeight + 10
-        ) {
-          return el;
-        }
+        if (check(el)) return el;
         el = el.parentElement;
       }
-      // check body / document scroll as fallback
-      if (document.documentElement.scrollHeight > window.innerHeight + 10) {
-        return document.documentElement;
-      }
+      const root = document.documentElement;
+      if (axis === "y" && root.scrollHeight > window.innerHeight + 10) return root;
+      if (axis === "x" && root.scrollWidth  > window.innerWidth  + 10) return root;
     }
-    // Blind fallback: first scrollable element in DOM order
     for (const el of Array.from(document.querySelectorAll("*"))) {
-      const s = getComputedStyle(el);
-      if ((s.overflowY === "auto" || s.overflowY === "scroll") &&
-          el.scrollHeight > el.clientHeight + 10) return el;
+      if (check(el)) return el;
     }
     return null;
   }
@@ -279,22 +279,38 @@ export class GestureEngine {
     }
 
     if (smoothed === "TWO_FINGER" && this.settings.twoFingerEnabled) {
-      const currentY = (landmarks[8].y + landmarks[12].y) / 2;
-      // Mirror X to match screen coords (same as cursor position logic)
-      const handX = (1 - (landmarks[8].x + landmarks[12].x) / 2) * window.innerWidth;
-      const handY = currentY * window.innerHeight;
-      this.overlay?.showScrollIndicator(handX, handY);
-      if (this.prevTwoFingerY !== null) {
-        const deltaY = (currentY - this.prevTwoFingerY) * window.innerHeight * 5;
-        if (Math.abs(deltaY) > 1) {
-          this.emit("twofinger", { deltaY });
-          const scrollEl = this.findScrollContainer(handX, handY);
-          scrollEl?.scrollBy({ top: deltaY, behavior: "instant" as ScrollBehavior });
+      const rawMidY = (landmarks[8].y + landmarks[12].y) / 2;
+      const mirroredMidX = 1 - (landmarks[8].x + landmarks[12].x) / 2;
+      const handX = mirroredMidX * window.innerWidth;
+      const handY = rawMidY * window.innerHeight;
+
+      if (this.prevTwoFingerY !== null && this.prevTwoFingerX !== null) {
+        const deltaY = (rawMidY      - this.prevTwoFingerY) * window.innerHeight * 5;
+        const deltaX = (mirroredMidX - this.prevTwoFingerX) * window.innerWidth  * 5;
+        const absY = Math.abs(deltaY);
+        const absX = Math.abs(deltaX);
+
+        if (absY > 1 || absX > 1) {
+          this.emit("twofinger", { deltaY, deltaX });
+          if (absY >= absX) {
+            // dominant vertical
+            this.overlay?.showScrollIndicator(handX, handY, "v");
+            const el = this.findScrollContainer(handX, handY, "y");
+            el?.scrollBy({ top: deltaY, behavior: "instant" as ScrollBehavior });
+          } else {
+            // dominant horizontal
+            this.overlay?.showScrollIndicator(handX, handY, "h");
+            const el = this.findScrollContainer(handX, handY, "x");
+            el?.scrollBy({ left: deltaX, behavior: "instant" as ScrollBehavior });
+          }
         }
       }
-      this.prevTwoFingerY = currentY;
+
+      this.prevTwoFingerY = rawMidY;
+      this.prevTwoFingerX = mirroredMidX;
     } else {
       this.prevTwoFingerY = null;
+      this.prevTwoFingerX = null;
       this.overlay?.hideScrollIndicator();
     }
 

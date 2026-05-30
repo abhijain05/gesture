@@ -174,11 +174,12 @@ const CURSOR_CSS = `
 .gcore-scroll-arrow {
   width: 0;
   height: 0;
-  border-left: 5px solid transparent;
-  border-right: 5px solid transparent;
 }
-.gcore-scroll-arrow--up { border-bottom: 6px solid rgba(255,255,255,0.9); }
-.gcore-scroll-arrow--down { border-top: 6px solid rgba(255,255,255,0.9); }
+.gcore-scroll-arrow--up { border-left: 5px solid transparent; border-right: 5px solid transparent; border-bottom: 6px solid rgba(255,255,255,0.9); }
+.gcore-scroll-arrow--down { border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 6px solid rgba(255,255,255,0.9); }
+.gcore-scroll-arrow--left { border-top: 5px solid transparent; border-bottom: 5px solid transparent; border-right: 6px solid rgba(255,255,255,0.9); }
+.gcore-scroll-arrow--right { border-top: 5px solid transparent; border-bottom: 5px solid transparent; border-left: 6px solid rgba(255,255,255,0.9); }
+.gcore-scroll-indicator-inner--h { flex-direction: row; }
 .gcore-scroll-label {
   position: absolute;
   bottom: -18px;
@@ -380,10 +381,23 @@ export class CursorOverlay {
     (this.dwellRing as unknown as HTMLElement).style.opacity = progress > 0 ? "1" : "0";
   }
 
-  showScrollIndicator(x: number, y: number): void {
+  showScrollIndicator(x: number, y: number, direction: "v" | "h" = "v"): void {
     this.scrollIndicator.style.left = `${x}px`;
     this.scrollIndicator.style.top = `${y}px`;
     this.scrollIndicator.classList.add("gcore-scroll-indicator--visible");
+    const inner = this.scrollIndicator.querySelector(".gcore-scroll-indicator-inner");
+    const label = this.scrollIndicator.querySelector(".gcore-scroll-label");
+    if (inner) {
+      if (direction === "h") {
+        inner.className = "gcore-scroll-indicator-inner gcore-scroll-indicator-inner--h";
+        inner.innerHTML = `<div class="gcore-scroll-arrow gcore-scroll-arrow--left"></div><div class="gcore-scroll-arrow gcore-scroll-arrow--right"></div>`;
+        if (label) label.textContent = "SCROLL ↔";
+      } else {
+        inner.className = "gcore-scroll-indicator-inner";
+        inner.innerHTML = `<div class="gcore-scroll-arrow gcore-scroll-arrow--up"></div><div class="gcore-scroll-arrow gcore-scroll-arrow--down"></div>`;
+        if (label) label.textContent = "SCROLL ↕";
+      }
+    }
   }
 
   hideScrollIndicator(): void {

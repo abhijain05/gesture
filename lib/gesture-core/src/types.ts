@@ -37,7 +37,7 @@ export type GestureEventMap = {
   cursor: CustomEvent<{ x: number; y: number }>;
   pinch: CustomEvent<{ x: number; y: number }>;
   palm: CustomEvent<Record<string, never>>;
-  twofinger: CustomEvent<{ deltaY: number }>;
+  twofinger: CustomEvent<{ deltaY: number; deltaX: number }>;
   dwell: CustomEvent<{ x: number; y: number; target: Element | null; progress: number }>;
 };
 
