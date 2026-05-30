@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/gesture-ui5-demo/"
+title = "Gesture UI5 Demo"
+version = "1.0.0"
+id = "artifacts/gesture-ui5-demo"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/gesture-ui5-demo/" ]
+localPort = 3000
+
+[services.development]
+run = "pnpm --filter @workspace/gesture-ui5-demo run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/gesture-ui5-demo", "run", "build" ]
+publicDir = "artifacts/gesture-ui5-demo/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "3000"
+BASE_PATH = "/gesture-ui5-demo/"
