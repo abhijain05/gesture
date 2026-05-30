@@ -64,8 +64,39 @@ const CURSOR_CSS = `
   border: 2px solid rgba(0, 112, 242, 0.5);
   background: #000;
   box-shadow: 0 4px 20px rgba(0,0,0,0.4);
-  pointer-events: none;
+  pointer-events: auto;
   z-index: 2147483646;
+  transition: box-shadow 0.15s, border-color 0.15s;
+  user-select: none;
+}
+.gcore-webcam:hover {
+  border-color: rgba(0, 112, 242, 0.9);
+  box-shadow: 0 6px 28px rgba(0,0,0,0.55);
+}
+.gcore-webcam.gcore-webcam--dragging {
+  box-shadow: 0 12px 40px rgba(0,0,0,0.7);
+  border-color: rgba(0, 112, 242, 1);
+  opacity: 0.92;
+  transition: none;
+}
+.gcore-webcam-handle {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 22px;
+  background: linear-gradient(180deg, rgba(0,0,0,0.65) 0%, transparent 100%);
+  cursor: grab;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+}
+.gcore-webcam-handle:active { cursor: grabbing; }
+.gcore-webcam-handle-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.55);
 }
 .gcore-webcam video {
   width: 100%;
@@ -175,7 +206,85 @@ export class CursorOverlay {
   private initWebcam(): void {
     this.webcamContainer = document.createElement("div");
     this.webcamContainer.className = "gcore-webcam";
+
+    const handle = document.createElement("div");
+    handle.className = "gcore-webcam-handle";
+    for (let i = 0; i < 5; i++) {
+      const dot = document.createElement("span");
+      dot.className = "gcore-webcam-handle-dot";
+      handle.appendChild(dot);
+    }
+    this.webcamContainer.appendChild(handle);
+
+    this.makeDraggable(this.webcamContainer, handle);
     document.body.appendChild(this.webcamContainer);
+  }
+
+  private makeDraggable(el: HTMLDivElement, handle: HTMLDivElement): void {
+    const W = 160, H = 120;
+    const STORAGE_KEY = "gcore-webcam-pos";
+
+    const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
+
+    const applyPos = (left: number, top: number) => {
+      const maxX = window.innerWidth - W - 4;
+      const maxY = window.innerHeight - H - 4;
+      const x = clamp(left, 4, maxX);
+      const y = clamp(top, 4, maxY);
+      el.style.left = `${x}px`;
+      el.style.top = `${y}px`;
+      el.style.right = "auto";
+      el.style.bottom = "auto";
+      return { x, y };
+    };
+
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const { x, y } = JSON.parse(saved);
+        applyPos(x, y);
+      }
+    } catch (_) {}
+
+    let dragging = false;
+    let startMouseX = 0, startMouseY = 0, startElX = 0, startElY = 0;
+
+    const getElLeft = () => parseInt(el.style.left || "", 10) || (window.innerWidth - W - 16);
+    const getElTop  = () => parseInt(el.style.top  || "", 10) || (window.innerHeight - H - 16);
+
+    const onStart = (clientX: number, clientY: number) => {
+      dragging = true;
+      startMouseX = clientX;
+      startMouseY = clientY;
+      startElX = getElLeft();
+      startElY = getElTop();
+      el.classList.add("gcore-webcam--dragging");
+      document.body.style.userSelect = "none";
+    };
+
+    const onMove = (clientX: number, clientY: number) => {
+      if (!dragging) return;
+      const { x, y } = applyPos(
+        startElX + (clientX - startMouseX),
+        startElY + (clientY - startMouseY)
+      );
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ x, y })); } catch (_) {}
+    };
+
+    const onEnd = () => {
+      if (!dragging) return;
+      dragging = false;
+      el.classList.remove("gcore-webcam--dragging");
+      document.body.style.userSelect = "";
+    };
+
+    handle.addEventListener("mousedown", (e) => { e.preventDefault(); onStart(e.clientX, e.clientY); });
+    document.addEventListener("mousemove", (e) => onMove(e.clientX, e.clientY));
+    document.addEventListener("mouseup", onEnd);
+
+    handle.addEventListener("touchstart", (e) => { e.preventDefault(); onStart(e.touches[0].clientX, e.touches[0].clientY); }, { passive: false });
+    document.addEventListener("touchmove", (e) => { if (dragging) onMove(e.touches[0].clientX, e.touches[0].clientY); }, { passive: true });
+    document.addEventListener("touchend", onEnd);
   }
 
   getWebcamContainer(): HTMLDivElement | null {
