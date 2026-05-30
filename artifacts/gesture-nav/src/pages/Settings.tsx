@@ -93,7 +93,7 @@ export default function Settings() {
   const { gestureSettings, updateSettings } = useGestureContext();
 
   const handleReset = () => {
-    updateSettings({ pointFingerEnabled: true, pinchEnabled: true, openPalmEnabled: true, sensitivity: 0.6 });
+    updateSettings({ pointFingerEnabled: true, pinchEnabled: true, openPalmEnabled: true, twoFingerEnabled: true, sensitivity: 0.6 });
   };
 
   return (
@@ -159,6 +159,13 @@ export default function Settings() {
               desc: "Bring thumb and index together to select hovered item",
               glyph: "✦",
               color: "#a855f7",
+            },
+            {
+              key: "twoFingerEnabled" as const,
+              label: "Two Fingers",
+              desc: "Peace sign — hand up scrolls up, hand down scrolls down",
+              glyph: "✌",
+              color: "#f59e0b",
             },
             {
               key: "openPalmEnabled" as const,
