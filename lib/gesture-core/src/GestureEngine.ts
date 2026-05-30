@@ -3,6 +3,8 @@ import { HandTracker } from "./HandTracker.js";
 import { detectGesture } from "./GestureRecognizer.js";
 import { CursorOverlay } from "./CursorOverlay.js";
 import { VirtualKeyboard } from "./VirtualKeyboard.js";
+import { GestureGuide } from "./GestureGuide.js";
+import { ActionToast } from "./ActionToast.js";
 import { playSound } from "./AudioFeedback.js";
 import type {
   GestureEngineOptions,
@@ -20,7 +22,7 @@ const DEFAULT_SETTINGS: GestureSettings = {
   twoFingerEnabled: true,
   sensitivity: 0.6,
   dwellTimeMs: 600,
-  palmHoldMs: 5000,
+  palmHoldMs: 3000,
   audioFeedback: true,
   showCursor: true,
   showWebcam: true,
@@ -33,6 +35,8 @@ export class GestureEngine {
   private tracker: HandTracker | null = null;
   private overlay: CursorOverlay | null = null;
   private keyboard: VirtualKeyboard | null = null;
+  private guide: GestureGuide | null = null;
+  private toast: ActionToast | null = null;
   private video: HTMLVideoElement;
   private webcamCanvas: HTMLCanvasElement | null = null;
   private useVirtualKeyboard: boolean;
@@ -46,6 +50,8 @@ export class GestureEngine {
   private lastPinchTime = 0;
   private palmHoldStart: number | null = null;
   private palmFireCooldownUntil = 0;
+  private fistHoldStart: number | null = null;
+  private pausedUntil = 0;
   private previousGesture: GestureType = "NONE";
 
   private state: GestureState = {
@@ -78,6 +84,8 @@ export class GestureEngine {
     if (this.useVirtualKeyboard) {
       this.keyboard = new VirtualKeyboard({ dwellTimeMs: this.settings.dwellTimeMs });
     }
+    this.guide = new GestureGuide();
+    this.toast = new ActionToast();
   }
 
   on<K extends GestureEventType>(
@@ -133,6 +141,7 @@ export class GestureEngine {
         if (status === "ready") {
           this.state.isTracking = true;
           this.emit("ready", { message: "Gesture engine ready" });
+          this.guide?.showIfFirstTime();
         } else if (status === "error") {
           this.emit("error", { message: msg ?? "Unknown error" });
         }
@@ -153,6 +162,8 @@ export class GestureEngine {
     this.tracker?.destroy();
     this.overlay?.destroy();
     this.keyboard?.destroy();
+    this.guide?.destroy();
+    this.toast?.destroy();
     this.video.remove();
     this.listeners.forEach((set, event) => {
       set.forEach((l) => this.emitter.removeEventListener(event, l));
@@ -230,6 +241,41 @@ export class GestureEngine {
       this.previousGesture = smoothed;
     }
 
+    // FIST: pause / resume all gesture processing
+    const now = Date.now();
+    if (smoothed === "FIST") {
+      if (!this.fistHoldStart) this.fistHoldStart = now;
+      const held = now - this.fistHoldStart;
+      if (this.pausedUntil > now) {
+        // Already paused — hold fist 1s to resume early
+        if (held > 1000) {
+          this.pausedUntil = 0;
+          this.fistHoldStart = null;
+          this.overlay?.setPaused(false);
+          this.toast?.show("▶️", "Gestures resumed");
+          this.emit("resume", {});
+        }
+      } else {
+        // Not paused — hold fist 2s to pause
+        if (held > 2000) {
+          this.pausedUntil = now + 30000;
+          this.fistHoldStart = null;
+          this.overlay?.setPaused(true);
+          this.overlay?.hideCursor();
+          this.overlay?.clearHighlight();
+          this.toast?.show("✊", "Gestures paused — make a fist again to resume");
+          this.emit("pause", { duration: 30000 });
+        }
+      }
+    } else {
+      this.fistHoldStart = null;
+    }
+
+    if (this.pausedUntil > now) {
+      this.overlay?.hideCursor();
+      return;
+    }
+
     const indexTip = landmarks[8];
     let cursorPos: { x: number; y: number } | null = null;
 
@@ -250,6 +296,7 @@ export class GestureEngine {
       }
       this.smoothCursor = cursorPos;
       this.overlay?.moveCursor(cursorPos.x, cursorPos.y, smoothed);
+      this.overlay?.highlightAt(cursorPos.x, cursorPos.y);
       this.emit("cursor", cursorPos);
       this.handleDwell(cursorPos.x, cursorPos.y);
     } else {
@@ -257,28 +304,29 @@ export class GestureEngine {
       this.dwellStart = null;
       this.lastDwellTarget = null;
       this.overlay?.hideCursor();
+      this.overlay?.clearHighlight();
     }
 
     if (smoothed === "PINCH" && this.settings.pinchEnabled) {
-      const now = Date.now();
       if (now - this.lastPinchTime > PINCH_DEBOUNCE_MS) {
         this.lastPinchTime = now;
         if (cursorPos) {
           if (this.settings.audioFeedback) playSound("select");
           this.emit("pinch", { x: cursorPos.x, y: cursorPos.y });
+          const el = document.elementFromPoint(cursorPos.x, cursorPos.y);
+          const label = (el as HTMLElement)?.textContent?.trim().slice(0, 28) || "Clicked";
+          this.toast?.show("🤏", label);
           this.simulateClick(cursorPos.x, cursorPos.y);
         }
       }
     }
 
     if (smoothed === "OPEN_PALM" && this.settings.openPalmEnabled) {
-      const now = Date.now();
-
       // Ignore palm during post-fire cooldown so popup doesn't reappear immediately
       if (now < this.palmFireCooldownUntil) {
         this.palmHoldStart = null;
       } else {
-        const SILENT_MS = 3000;          // 3s silent phase before popup appears
+        const SILENT_MS = 1500;           // 1.5s silent phase before popup appears
         const COUNTDOWN_MS = this.settings.palmHoldMs; // 5s visible countdown
 
         if (this.palmHoldStart === null) this.palmHoldStart = now;
@@ -301,6 +349,7 @@ export class GestureEngine {
             this.palmFireCooldownUntil = now + 4000; // 4s cooldown before palm can fire again
             this.overlay?.hidePalmCountdown();
             if (this.settings.audioFeedback) playSound("home");
+            this.toast?.show("🏠", "Going home");
             this.emit("palm", {});
           }
         }
@@ -359,24 +408,27 @@ export class GestureEngine {
   }
 
   private handleDwell(x: number, y: number): void {
-    const target = document.elementFromPoint(x, y);
-    const isDwellable =
-      target &&
-      (target.hasAttribute("data-gesture-dwell") ||
-        target.closest("[data-gesture-dwell]") !== null);
+    // Find dwell target: explicit attr OR auto-detected interactive element
+    let dwellEl: Element | null = null;
+    let el: Element | null = document.elementFromPoint(x, y);
+    while (el && el !== document.documentElement) {
+      if (el.hasAttribute("data-gesture-dwell") || this.isAutoGestureTarget(el)) {
+        dwellEl = el;
+        break;
+      }
+      el = el.parentElement;
+    }
 
-    if (!isDwellable) {
+    if (!dwellEl) {
       this.dwellStart = null;
       this.lastDwellTarget = null;
       this.overlay?.setDwellProgress(0);
       return;
     }
 
-    const dwellTarget = target.closest("[data-gesture-dwell]") ?? target;
-
-    if (dwellTarget !== this.lastDwellTarget) {
+    if (dwellEl !== this.lastDwellTarget) {
       this.dwellStart = Date.now();
-      this.lastDwellTarget = dwellTarget;
+      this.lastDwellTarget = dwellEl;
       if (this.settings.audioFeedback) playSound("hover");
     }
 
@@ -387,14 +439,30 @@ export class GestureEngine {
 
       if (progress >= 1) {
         if (this.settings.audioFeedback) playSound("dwell");
-        this.emit("dwell", { x, y, target: dwellTarget, progress: 1 });
-        (dwellTarget as HTMLElement).click?.();
+        this.emit("dwell", { x, y, target: dwellEl, progress: 1 });
+        const label = (dwellEl as HTMLElement).textContent?.trim().slice(0, 28) || "element";
+        this.toast?.show("⏱", `Activated: ${label}`);
+        (dwellEl as HTMLElement).click?.();
         this.dwellStart = null;
         this.overlay?.setDwellProgress(0);
       } else {
-        this.emit("dwell", { x, y, target: dwellTarget, progress });
+        this.emit("dwell", { x, y, target: dwellEl, progress });
       }
     }
+  }
+
+  private isAutoGestureTarget(el: Element): boolean {
+    const tag = el.tagName.toLowerCase();
+    const role = el.getAttribute("role") ?? "";
+    const inputType = tag === "input" ? (el as HTMLInputElement).type : "";
+    return (
+      tag === "button" || tag === "a" ||
+      (tag === "input" && !["text","search","email","password","number","tel","url"].includes(inputType)) ||
+      tag === "select" ||
+      ["button","link","menuitem","tab","option","treeitem","checkbox","radio"].includes(role) ||
+      el.classList.contains("sapMBtn") || el.classList.contains("sapMLIB") ||
+      el.classList.contains("sapMTabBarItem") || el.classList.contains("sapMListItem")
+    );
   }
 
   private simulateClick(x: number, y: number): void {

@@ -1,3 +1,5 @@
+const WORD_LIST = ("the be to of and a in that have it for not on with he as you do at this but his by from they we say her she or an will my one all would there their what so up out if about who get which go me when make can like time no just him know take people into year your good some could them see other than then now look only come its over think also back after use two how our work first well way even new want because any these give day most us please find create update delete search open close save send order confirm cancel select return home back next previous submit approve reject navigate show list detail view report sales order customer product invoice delivery service note message task project team user admin setting account profile email phone number address city country date amount total price quantity status name title description comment attachment document file export import print help support").split(" ");
+
 type KeyDef = string | { key: string; label: string; flex?: number };
 
 const ROWS: KeyDef[][] = [
@@ -15,6 +17,7 @@ const SHIFT_MAP: Record<string,string> = {
 
 export class VirtualKeyboard {
   private container: HTMLDivElement;
+  private suggRow: HTMLDivElement | null = null;
   private currentInput: HTMLInputElement | HTMLTextAreaElement | null = null;
   private isShift = false;
   private isCaps = false;
@@ -130,6 +133,27 @@ export class VirtualKeyboard {
     if (!input && key !== "CLOSE") return;
 
     if (key === "CLOSE") { this.hide(); return; }
+
+    // Word suggestion completion
+    if (key.startsWith("WORD:") && input) {
+      const word = key.slice(5);
+      const val = input.value;
+      const lastSpace = Math.max(val.lastIndexOf(" "), val.lastIndexOf("\n"));
+      const before = lastSpace >= 0 ? val.slice(0, lastSpace + 1) : "";
+      const newVal = before + word + " ";
+      const setter = Object.getOwnPropertyDescriptor(
+        input instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype,
+        "value"
+      )?.set;
+      if (setter) {
+        setter.call(input, newVal);
+        try { input.setSelectionRange(newVal.length, newVal.length); } catch (_) {}
+      }
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+      this.updatePreview();
+      return;
+    }
     if (key === "SHIFT" || key === "SHIFT2") {
       this.isShift = !this.isShift;
       this.updateLabels();
@@ -168,6 +192,7 @@ export class VirtualKeyboard {
       if (this.isShift) { this.isShift = false; this.updateLabels(); }
     }
     this.updatePreview();
+    this.updateSuggestions();
   }
 
   private typeChar(el: HTMLInputElement | HTMLTextAreaElement, char: string): void {
@@ -238,11 +263,12 @@ export class VirtualKeyboard {
   }
 
   private show(): void {
-    if (this.visible) { this.updatePreview(); return; }
+    if (this.visible) { this.updatePreview(); this.updateSuggestions(); return; }
     this.visible = true;
     this.container.style.transform = "translateY(0)";
     this.container.style.opacity = "1";
     this.updatePreview();
+    this.updateSuggestions();
   }
 
   hide(): void {
@@ -310,8 +336,52 @@ export class VirtualKeyboard {
       body.appendChild(rowEl);
     }
 
+    // Suggestion row (word completion)
+    const suggRow = document.createElement("div");
+    suggRow.className = "vk-sugg-row";
+    for (let i = 0; i < 3; i++) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "vk-sugg-btn";
+      btn.dataset.vkKey = `WORD:`;
+      btn.style.display = "none";
+      btn.addEventListener("mousedown", (e) => e.preventDefault());
+      btn.addEventListener("click", () => {
+        const word = btn.dataset.vkKey?.replace("WORD:", "") ?? "";
+        if (word) this.pressKey(`WORD:${word}`);
+      });
+      suggRow.appendChild(btn);
+    }
+    this.suggRow = suggRow;
+    wrap.appendChild(suggRow);
+
     wrap.appendChild(body);
     return wrap;
+  }
+
+  private updateSuggestions(): void {
+    if (!this.suggRow || !this.currentInput) {
+      this.suggRow?.querySelectorAll<HTMLElement>(".vk-sugg-btn").forEach(b => { b.style.display = "none"; });
+      return;
+    }
+    const val = this.currentInput.value;
+    const parts = val.split(/\s+/);
+    const current = parts[parts.length - 1].toLowerCase();
+    const btns = this.suggRow.querySelectorAll<HTMLElement>(".vk-sugg-btn");
+    if (current.length < 1) {
+      btns.forEach(b => { b.style.display = "none"; });
+      return;
+    }
+    const matches = WORD_LIST.filter(w => w.startsWith(current) && w.length > current.length).slice(0, 3);
+    btns.forEach((btn, i) => {
+      if (matches[i]) {
+        btn.textContent = matches[i];
+        (btn as HTMLElement).dataset.vkKey = `WORD:${matches[i]}`;
+        btn.style.display = "";
+      } else {
+        btn.style.display = "none";
+      }
+    });
   }
 
   private injectStyles(): HTMLStyleElement {
@@ -410,6 +480,31 @@ export class VirtualKeyboard {
         pointer-events: none;
       }
       .vk-key-label { position: relative; z-index: 1; pointer-events: none; }
+      .vk-sugg-row {
+        display: flex; gap: 6px; padding: 0 0 8px;
+      }
+      .vk-sugg-btn {
+        flex: 1;
+        height: 34px;
+        background: rgba(0,112,242,0.15);
+        border: 1px solid rgba(0,112,242,0.35);
+        border-radius: 20px;
+        color: #60a5fa;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        padding: 0 10px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        transition: background 0.12s, border-color 0.12s;
+        outline: none;
+      }
+      .vk-sugg-btn:hover {
+        background: rgba(0,112,242,0.3);
+        border-color: rgba(0,112,242,0.6);
+        color: #93c5fd;
+      }
     `;
     document.head.appendChild(style);
     return style;

@@ -260,6 +260,24 @@ const CURSOR_CSS = `
   line-height: 1;
   text-shadow: 0 0 16px rgba(74,222,128,0.6);
 }
+.gcore-el-highlight {
+  position: fixed;
+  pointer-events: none;
+  z-index: 2147483644;
+  border: 2px solid rgba(0, 112, 242, 0.75);
+  border-radius: 4px;
+  background: rgba(0, 112, 242, 0.06);
+  box-shadow: 0 0 0 1px rgba(0,112,242,0.18);
+  opacity: 0;
+  top: 0; left: 0; width: 0; height: 0;
+  transition: opacity 0.14s ease, left 0.07s ease, top 0.07s ease, width 0.07s ease, height 0.07s ease, border-radius 0.07s ease;
+}
+.gcore-el-highlight--on { opacity: 1; }
+.gcore-badge--paused { border-color: rgba(245,158,11,0.35) !important; }
+.gcore-badge--paused .gcore-badge-dot {
+  background: #f59e0b !important;
+  box-shadow: 0 0 6px rgba(245,158,11,0.8) !important;
+}
 `;
 
 export class CursorOverlay {
@@ -273,6 +291,7 @@ export class CursorOverlay {
   private palmOverlay: HTMLDivElement;
   private palmCountdownEl: HTMLElement | null = null;
   private palmRingCircle: SVGCircleElement | null = null;
+  private elHighlight: HTMLDivElement;
   private styleEl: HTMLStyleElement;
   private visible = false;
 
@@ -351,10 +370,14 @@ export class CursorOverlay {
     this.palmCountdownEl = this.palmOverlay.querySelector(".gcore-palm-countdown");
     this.palmRingCircle = this.palmOverlay.querySelector(".gcore-palm-progress-circle");
 
+    this.elHighlight = document.createElement("div");
+    this.elHighlight.className = "gcore-el-highlight";
+
     document.body.appendChild(this.overlay);
     document.body.appendChild(this.badge);
     document.body.appendChild(this.palmOverlay);
     document.body.appendChild(this.scrollIndicator);
+    document.body.appendChild(this.elHighlight);
 
     if (showWebcam) this.initWebcam();
   }
@@ -476,6 +499,58 @@ export class CursorOverlay {
     (this.dwellRing as unknown as HTMLElement).style.opacity = progress > 0 ? "1" : "0";
   }
 
+  highlightAt(x: number, y: number): void {
+    const el = document.elementFromPoint(x, y);
+    let target: Element | null = el;
+    while (target && target !== document.documentElement && target !== document.body) {
+      if (this.isHighlightable(target)) break;
+      target = target.parentElement;
+    }
+    if (!target || target === document.documentElement || target === document.body) {
+      this.clearHighlight();
+      return;
+    }
+    const rect = target.getBoundingClientRect();
+    if (rect.width < 4 || rect.height < 4) { this.clearHighlight(); return; }
+    const PAD = 2;
+    const radius = getComputedStyle(target).borderRadius || "4px";
+    const h = this.elHighlight;
+    h.style.left = `${rect.left - PAD}px`;
+    h.style.top = `${rect.top - PAD}px`;
+    h.style.width = `${rect.width + PAD * 2}px`;
+    h.style.height = `${rect.height + PAD * 2}px`;
+    h.style.borderRadius = radius;
+    h.classList.add("gcore-el-highlight--on");
+  }
+
+  clearHighlight(): void {
+    this.elHighlight.classList.remove("gcore-el-highlight--on");
+  }
+
+  setPaused(paused: boolean): void {
+    if (paused) {
+      this.badge.innerHTML = `<span class="gcore-badge-dot"></span>⏸ Gestures Paused`;
+      this.badge.classList.add("gcore-badge--paused");
+    } else {
+      this.badge.innerHTML = `<span class="gcore-badge-dot"></span>Gesture Control Active`;
+      this.badge.classList.remove("gcore-badge--paused");
+    }
+  }
+
+  private isHighlightable(el: Element): boolean {
+    const tag = el.tagName.toLowerCase();
+    const role = el.getAttribute("role") ?? "";
+    const inputType = tag === "input" ? (el as HTMLInputElement).type : "";
+    return (
+      tag === "button" || tag === "a" || tag === "select" ||
+      (tag === "input" && ["submit","button","checkbox","radio"].includes(inputType)) ||
+      ["button","link","menuitem","tab","option","treeitem","checkbox","radio","listitem"].includes(role) ||
+      el.hasAttribute("data-gesture-dwell") || el.hasAttribute("data-gesture-click") ||
+      el.classList.contains("sapMBtn") || el.classList.contains("sapMLIB") ||
+      el.classList.contains("sapMTabBarItem") || el.classList.contains("sapMListItem")
+    );
+  }
+
   showPalmCountdown(progress: number, secondsLeft: number): void {
     this.palmOverlay.classList.add("gcore-palm-overlay--visible");
     if (this.palmCountdownEl) this.palmCountdownEl.textContent = String(secondsLeft);
@@ -519,6 +594,7 @@ export class CursorOverlay {
     this.badge.remove();
     this.palmOverlay.remove();
     this.scrollIndicator.remove();
+    this.elHighlight.remove();
     this.webcamContainer?.remove();
     this.styleEl.remove();
   }

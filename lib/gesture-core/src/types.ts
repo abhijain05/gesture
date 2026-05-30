@@ -1,4 +1,4 @@
-export type GestureType = "POINT_FINGER" | "PINCH" | "OPEN_PALM" | "TWO_FINGER" | "NONE";
+export type GestureType = "POINT_FINGER" | "PINCH" | "OPEN_PALM" | "TWO_FINGER" | "FIST" | "NONE";
 
 export interface GestureSettings {
   pointFingerEnabled: boolean;
@@ -40,6 +40,8 @@ export type GestureEventMap = {
   pinch: CustomEvent<{ x: number; y: number }>;
   palm: CustomEvent<Record<string, never>>;
   palmProgress: CustomEvent<{ progress: number; secondsLeft: number }>;
+  pause: CustomEvent<{ duration: number }>;
+  resume: CustomEvent<Record<string, never>>;
   twofinger: CustomEvent<{ deltaY: number; deltaX: number }>;
   dwell: CustomEvent<{ x: number; y: number; target: Element | null; progress: number }>;
 };

@@ -44,6 +44,15 @@ export function detectGesture(
     return { gesture: "PINCH", confidence: Math.min(1, (effectivePinch - pinchDist) / effectivePinch) };
   }
 
+  // FIST: all four fingers curled (checked before POINT_FINGER)
+  const indexCurl = isCurled(indexTip, indexPip);
+  if (indexCurl && middleCurl && ringCurl && pinkyCurl) {
+    // Only call it FIST if pinch distance is also wide (thumb not pinching)
+    if (pinchDist > pinchThreshold * 1.2) {
+      return { gesture: "FIST", confidence: 0.8 };
+    }
+  }
+
   if (indexExt && middleCurl && ringCurl && pinkyCurl) {
     const conf = Math.min(1, (indexPip.y - indexTip.y + middleTip.y - middlePip.y) * 3);
     if (conf > 0.3) return { gesture: "POINT_FINGER", confidence: conf };
