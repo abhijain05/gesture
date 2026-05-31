@@ -192,7 +192,11 @@ export default function App() {
         )}
 
         {hasVoice && isMobile && (
-          <div style={{ fontSize: 18, cursor: "pointer", opacity: 0.8 }} title="Voice command">🎤</div>
+          <div
+            onClick={() => autoRef.current?.getVoice()?.toggle()}
+            style={{ fontSize: 18, cursor: "pointer", opacity: 0.8 }}
+            title="Tap to start voice command"
+          >🎤</div>
         )}
 
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
