@@ -16,7 +16,14 @@ export interface VoiceAction {
 
 export interface VoiceCommandOptions {
   geminiApiKey: string;
+  /** Static page list — used if getPages is not provided */
   pages?: VoicePage[];
+  /**
+   * Dynamic page scanner called fresh at each voice trigger.
+   * Takes priority over `pages`.  Use this for SAP UI5 / SPA apps
+   * where nav items may be lazy-loaded or permission-gated.
+   */
+  getPages?: () => VoicePage[];
   getCurrentPage?: () => string;
   onAction?: (action: VoiceAction) => boolean | void;
   triggerKey?: string;
@@ -192,7 +199,11 @@ export class VoiceCommandEngine {
   private async callGemini(
     b64Audio: string
   ): Promise<{ transcript: string; actions: VoiceAction[] }> {
-    const pageList = this.opts.pages
+    // Scan live DOM at trigger time — always reflects current app state
+    const pages = this.opts.getPages
+      ? this.opts.getPages()
+      : (this.opts.pages ?? []);
+    const pageList = pages
       .map((p) => `${p.name} (id: ${p.id})`)
       .join(", ");
     const currentPage = this.opts.getCurrentPage();
