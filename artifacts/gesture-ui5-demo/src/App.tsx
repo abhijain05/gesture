@@ -78,9 +78,14 @@ export default function App() {
     if (resolved) setPage(resolved);
   };
 
-  const { words, state: wakeState, supported: wakeSupported, addWord, removeWord } = useWakeWord(handleVoiceCommand);
+  const { words, state: wakeState, lastHeard, supported: wakeSupported, addWord, removeWord } = useWakeWord(handleVoiceCommand);
+
+  // Chrome's SpeechRecognition is blocked in cross-origin iframes.
+  // The Replit embedded preview is such an iframe — the user must open in a new tab.
+  const isInIframe = window !== window.top;
 
   const wakeStateLabel: Record<typeof wakeState, string> = {
+    "requesting-mic":    "Requesting mic…",
     "inactive":          "Wake word off",
     "listening-wake":    `Say "${words[0] ?? "tarang"}"`,
     "listening-command": "Listening…",
@@ -148,6 +153,29 @@ export default function App() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100dvh", fontFamily: '"72", "72full", Arial, Helvetica, sans-serif', overflow: "hidden" }}>
+
+      {/* ── Iframe warning banner ─────────────────────────────────── */}
+      {isInIframe && wakeSupported && (
+        <div style={{
+          background: "#fff3cd", borderBottom: "1px solid #ffc107",
+          padding: "7px 20px", fontSize: 12, color: "#856404",
+          display: "flex", alignItems: "center", gap: 10, zIndex: 300, flexShrink: 0,
+        }}>
+          <span>⚠️ <b>Wake word won't work in the embedded preview</b> — Chrome blocks speech recognition in iframes.</span>
+          <a
+            href={window.location.href}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              background: "#ffc107", color: "#000", borderRadius: 6,
+              padding: "3px 10px", fontWeight: 700, fontSize: 11,
+              textDecoration: "none", flexShrink: 0,
+            }}
+          >
+            Open in new tab ↗
+          </a>
+        </div>
+      )}
 
       {/* ── Listening overlay ──────────────────────────────────────── */}
       {(isListeningCommand || isProcessing) && (
@@ -497,6 +525,11 @@ export default function App() {
                       }}>{w}</span>
                     ))}
                   </div>
+                  {lastHeard && (
+                    <div style={{ marginTop: 5, fontSize: 11, color: "#1d2d3e", background: "#f5f6f7", borderRadius: 6, padding: "3px 7px" }}>
+                      🎤 <i>"{lastHeard}"</i>
+                    </div>
+                  )}
                   <button
                     onClick={() => setWakeSettingsOpen(true)}
                     style={{

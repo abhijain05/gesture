@@ -3,7 +3,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 const STORAGE_KEY = "wake_words_v1";
 const DEFAULT_WORDS = ["tarang"];
 
-export type WakeWordState = "inactive" | "listening-wake" | "listening-command" | "processing";
+export type WakeWordState = "inactive" | "requesting-mic" | "listening-wake" | "listening-command" | "processing";
 
 function loadWords(): string[] {
   try {
@@ -25,12 +25,15 @@ const SR = (window as any).SpeechRecognition ?? (window as any).webkitSpeechReco
 export function useWakeWord(onCommand: (transcript: string) => void) {
   const [words, setWords] = useState<string[]>(loadWords);
   const [state, setState] = useState<WakeWordState>("inactive");
+  const [lastHeard, setLastHeard] = useState<string>("");
   const [supported] = useState(() => !!SR);
 
   const wakeRecRef    = useRef<any>(null);
   const commandRecRef = useRef<any>(null);
   const activeRef     = useRef(false);
   const wordsRef      = useRef(words);
+  const retryCountRef = useRef(0);
+  const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   wordsRef.current = words;
 
   const stopCommand = useCallback(() => {
@@ -42,6 +45,7 @@ export function useWakeWord(onCommand: (transcript: string) => void) {
     if (!SR) return;
     stopCommand();
 
+    console.log("[WakeWord] Wake word triggered — starting command recognition.");
     setState("listening-command");
     const rec = new SR();
     rec.continuous = false;
@@ -52,6 +56,8 @@ export function useWakeWord(onCommand: (transcript: string) => void) {
 
     rec.onresult = (e: any) => {
       const transcript = e.results[0]?.[0]?.transcript ?? "";
+      console.log("[WakeWord] Command heard:", transcript);
+      setLastHeard(transcript);
       setState("processing");
       onCommand(transcript.trim());
       setTimeout(() => {
@@ -59,35 +65,67 @@ export function useWakeWord(onCommand: (transcript: string) => void) {
       }, 800);
     };
 
-    rec.onerror = () => setState("listening-wake");
-    rec.onend   = () => {
+    rec.onerror = (e: any) => {
+      console.warn("[WakeWord] Command recognition error:", e.error);
+      setState("listening-wake");
+    };
+
+    rec.onend = () => {
       if (commandRecRef.current === rec) {
         commandRecRef.current = null;
         setState("listening-wake");
       }
     };
 
-    try { rec.start(); } catch { setState("listening-wake"); }
+    try { rec.start(); } catch (err) {
+      console.error("[WakeWord] Failed to start command rec:", err);
+      setState("listening-wake");
+    }
   }, [onCommand, stopCommand]);
+
+  const scheduleRestart = useCallback((startFn: () => void) => {
+    if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
+    // Exponential backoff: 300ms, 600ms, 1.2s, 2.4s … capped at 8s
+    const delay = Math.min(300 * Math.pow(2, retryCountRef.current), 8000);
+    retryCountRef.current += 1;
+    console.log(`[WakeWord] Scheduling restart in ${delay}ms (attempt ${retryCountRef.current})`);
+    retryTimerRef.current = setTimeout(() => {
+      if (activeRef.current) startFn();
+    }, delay);
+  }, []);
 
   const startWakeListener = useCallback(() => {
     if (!SR || !activeRef.current) return;
     try { wakeRecRef.current?.abort(); } catch {}
+    wakeRecRef.current = null;
+
+    console.log("[WakeWord] Starting wake listener. Words:", wordsRef.current);
 
     const rec = new SR();
     rec.continuous = true;
     rec.interimResults = true;
     rec.lang = "en-US";
-    rec.maxAlternatives = 3;
+    rec.maxAlternatives = 5;
     wakeRecRef.current = rec;
 
+    let gotResult = false;
+
     rec.onresult = (e: any) => {
+      gotResult = true;
+      retryCountRef.current = 0; // reset backoff on successful result
       if (commandRecRef.current) return;
+
       for (let i = e.resultIndex; i < e.results.length; i++) {
         for (let j = 0; j < e.results[i].length; j++) {
           const t: string = e.results[i][j].transcript.toLowerCase().trim();
+          const isFinal = e.results[i].isFinal;
+          console.log(`[WakeWord] Heard (${isFinal ? "FINAL" : "interim"}, alt ${j}): "${t}"`);
+          setLastHeard(t);
+
           for (const word of wordsRef.current) {
             if (t.includes(word.toLowerCase())) {
+              console.log(`[WakeWord] ✅ MATCH — "${word}" found in "${t}"`);
+              gotResult = true;
               try { rec.stop(); } catch {}
               wakeRecRef.current = null;
               startCommandListening();
@@ -99,36 +137,67 @@ export function useWakeWord(onCommand: (transcript: string) => void) {
     };
 
     rec.onend = () => {
-      if (wakeRecRef.current === rec && activeRef.current) {
-        setTimeout(startWakeListener, 300);
+      console.log(`[WakeWord] Recogniser ended (gotResult=${gotResult}). active:`, activeRef.current);
+      if (wakeRecRef.current === rec) wakeRecRef.current = null;
+      if (activeRef.current && !commandRecRef.current) {
+        scheduleRestart(startWakeListener);
       }
     };
 
     rec.onerror = (e: any) => {
+      console.warn("[WakeWord] Error:", e.error);
       if (e.error === "not-allowed" || e.error === "service-not-allowed") {
+        console.error("[WakeWord] Mic access denied permanently.");
         activeRef.current = false;
         setState("inactive");
         return;
       }
-      if (wakeRecRef.current === rec && activeRef.current) {
-        setTimeout(startWakeListener, 1500);
+      if (e.error === "network") {
+        console.warn("[WakeWord] Network error — Chrome speech service may be unavailable.");
+      }
+      if (wakeRecRef.current === rec) wakeRecRef.current = null;
+      if (activeRef.current && !commandRecRef.current) {
+        scheduleRestart(startWakeListener);
       }
     };
 
     try {
       rec.start();
+      console.log("[WakeWord] Recogniser started ✓");
       setState("listening-wake");
-    } catch {
+    } catch (err) {
+      console.error("[WakeWord] Failed to start:", err);
+      scheduleRestart(startWakeListener);
       setState("inactive");
     }
-  }, [startCommandListening]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [startCommandListening, scheduleRestart]);
 
   useEffect(() => {
-    if (!SR) return;
+    if (!SR) {
+      console.warn("[WakeWord] SpeechRecognition not supported.");
+      return;
+    }
+
     activeRef.current = true;
-    startWakeListener();
+    setState("requesting-mic");
+
+    console.log("[WakeWord] Requesting microphone permission…");
+    navigator.mediaDevices.getUserMedia({ audio: true })
+      .then((stream) => {
+        stream.getTracks().forEach((t) => t.stop());
+        console.log("[WakeWord] Mic permission granted ✓ — starting.");
+        retryCountRef.current = 0;
+        if (activeRef.current) startWakeListener();
+      })
+      .catch((err) => {
+        console.error("[WakeWord] Mic permission denied:", err);
+        setState("inactive");
+      });
+
     return () => {
       activeRef.current = false;
+      if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
       try { wakeRecRef.current?.abort(); } catch {}
       stopCommand();
       wakeRecRef.current = null;
@@ -160,5 +229,5 @@ export function useWakeWord(onCommand: (transcript: string) => void) {
     setWords([...DEFAULT_WORDS]);
   }, []);
 
-  return { words, state, supported, addWord, removeWord, resetWords };
+  return { words, state, lastHeard, supported, addWord, removeWord, resetWords };
 }
