@@ -58,7 +58,7 @@ export class VoiceCommandEngine {
 
   private audioCtx: AudioContext | null = null;
   private analyser: AnalyserNode | null = null;
-  private animFrame: number | null = null;
+  private silenceTimer: ReturnType<typeof setTimeout> | null = null;
   private maxTimer: ReturnType<typeof setTimeout> | null = null;
 
   private wakeRec: any = null;
@@ -176,9 +176,9 @@ export class VoiceCommandEngine {
         } else {
           silentSince = null;
         }
-        this.animFrame = requestAnimationFrame(tick);
+        this.silenceTimer = setTimeout(tick, 100);
       };
-      this.animFrame = requestAnimationFrame(tick);
+      this.silenceTimer = setTimeout(tick, 100);
     } catch {}
   }
 
@@ -187,7 +187,7 @@ export class VoiceCommandEngine {
     this.state = "processing";
 
     if (this.maxTimer) clearTimeout(this.maxTimer);
-    if (this.animFrame) cancelAnimationFrame(this.animFrame);
+    if (this.silenceTimer) { clearTimeout(this.silenceTimer); this.silenceTimer = null; }
     if (this.audioCtx) { this.audioCtx.close().catch(() => {}); this.audioCtx = null; }
 
     if (this.recorder && this.recorder.state !== "inactive") {
