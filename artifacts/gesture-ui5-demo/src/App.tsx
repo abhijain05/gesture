@@ -1,16 +1,19 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useGestureEngine } from "@/hooks/useGestureEngine";
+import { VoiceCommandEngine } from "@workspace/gesture-core";
 import Overview from "@/pages/Overview";
 import SalesOrders from "@/pages/SalesOrders";
 import Products from "@/pages/Products";
+import Reports from "@/pages/Reports";
 import IntegrationGuide from "@/pages/IntegrationGuide";
 
-type Page = "overview" | "orders" | "products" | "integration";
+type Page = "overview" | "orders" | "products" | "reports" | "integration";
 
 const NAV_ITEMS: { id: Page; label: string; icon: string }[] = [
   { id: "overview", label: "Overview", icon: "🏠" },
   { id: "orders", label: "Sales Orders", icon: "📋" },
   { id: "products", label: "Products", icon: "📦" },
+  { id: "reports", label: "Reports", icon: "📊" },
   { id: "integration", label: "Integration Guide", icon: "🤚" },
 ];
 
@@ -22,14 +25,67 @@ const GESTURE_LABEL: Record<string, string> = {
   NONE: "No gesture",
 };
 
+const PAGE_IDS: Record<string, Page> = {
+  overview: "overview",
+  orders: "orders",
+  "sales-orders": "orders",
+  "salesorders": "orders",
+  products: "products",
+  reports: "reports",
+  integration: "integration",
+  "integration-guide": "integration",
+};
+
 export default function App() {
   const [page, setPage] = useState<Page>("overview");
   const { gestureState, status } = useGestureEngine(true);
+  const pageRef = useRef<Page>(page);
+  pageRef.current = page;
+
+  // Resolve a voice-provided page name/id to our Page type
+  const resolvePage = (raw: string | undefined): Page | null => {
+    if (!raw) return null;
+    const key = raw.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z-]/g, "");
+    if (PAGE_IDS[key]) return PAGE_IDS[key];
+    // fuzzy: match any nav item label
+    const match = NAV_ITEMS.find((n) =>
+      n.label.toLowerCase().includes(raw.toLowerCase()) ||
+      raw.toLowerCase().includes(n.label.toLowerCase())
+    );
+    return match?.id ?? null;
+  };
 
   useEffect(() => {
-    const handler = () => setPage("overview");
-    document.addEventListener("gesture:palm", handler);
-    return () => document.removeEventListener("gesture:palm", handler);
+    // Palm → home
+    const onPalm = () => setPage("overview");
+    document.addEventListener("gesture:palm", onPalm);
+
+    // Voice navigation
+    const onVoiceNav = (e: Event) => {
+      const page = (e as CustomEvent<{ page?: string }>).detail?.page;
+      const resolved = resolvePage(page);
+      if (resolved) setPage(resolved);
+    };
+    document.addEventListener("gesture:voice:navigate", onVoiceNav);
+
+    return () => {
+      document.removeEventListener("gesture:palm", onPalm);
+      document.removeEventListener("gesture:voice:navigate", onVoiceNav);
+    };
+  }, []);
+
+  // Initialize VoiceCommandEngine once
+  useEffect(() => {
+    const apiKey = import.meta.env.VITE_GEMINI_API_KEY as string | undefined;
+    if (!apiKey) return;
+
+    const engine = new VoiceCommandEngine({
+      geminiApiKey: apiKey,
+      pages: NAV_ITEMS.map((n) => ({ name: n.label, id: n.id })),
+      getCurrentPage: () => pageRef.current,
+    });
+
+    return () => engine.destroy();
   }, []);
 
   const gesture = gestureState.currentGesture;
@@ -72,7 +128,15 @@ export default function App() {
             {GESTURE_LABEL[gesture]}
           </div>
         )}
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginLeft: 8 }}>
+        {/* Voice hint in header */}
+        <div style={{
+          display: "flex", alignItems: "center", gap: 5,
+          background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.15)",
+          borderRadius: 14, padding: "3px 10px", fontSize: 11, color: "#aaa",
+        }}>
+          🎤 <span>Press <kbd style={{ background: "rgba(255,255,255,0.12)", borderRadius: 3, padding: "1px 4px", fontSize: 10 }}>`</kbd> for voice</span>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginLeft: 4 }}>
           <div style={{ width: 30, height: 30, borderRadius: "50%", background: "#0070f2", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 600 }}>
             JD
           </div>
@@ -121,7 +185,7 @@ export default function App() {
 
           <div style={{ flex: 1 }} />
 
-          {/* Gesture status mini panel */}
+          {/* Gesture + Voice status panel */}
           <div style={{ padding: "12px 16px", borderTop: "1px solid #f0f0f0", background: "#fafafa" }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: "#6a6d70", marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.06em" }}>
               Gesture Engine
@@ -138,12 +202,15 @@ export default function App() {
                   <span>Gesture</span>
                   <span style={{ fontWeight: 600 }}>{gesture === "NONE" ? "—" : gesture.replace("_", " ")}</span>
                 </div>
-                <div style={{ fontSize: 12, color: "#1d2d3e", display: "flex", justifyContent: "space-between" }}>
+                <div style={{ fontSize: 12, color: "#1d2d3e", display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
                   <span>FPS</span>
                   <span style={{ fontWeight: 600 }}>{gestureState.fps}</span>
                 </div>
               </>
             )}
+            <div style={{ fontSize: 11, color: "#888", borderTop: "1px solid #eee", paddingTop: 6, display: "flex", alignItems: "center", gap: 5 }}>
+              🎤 <span>Voice: press <b>`</b> or click mic</span>
+            </div>
           </div>
         </nav>
 
@@ -161,6 +228,7 @@ export default function App() {
           {page === "overview" && <Overview />}
           {page === "orders" && <SalesOrders />}
           {page === "products" && <Products />}
+          {page === "reports" && <Reports />}
           {page === "integration" && <IntegrationGuide />}
         </main>
       </div>
