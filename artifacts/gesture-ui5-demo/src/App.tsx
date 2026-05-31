@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { GestureUI5Auto } from "@workspace/gesture-ui5";
 import { useIsMobile } from "@/hooks/use-mobile";
 import Overview from "@/pages/Overview";
@@ -68,17 +68,17 @@ export default function App() {
   const pageRef = useRef<Page>(page);
   pageRef.current = page;
   const isMobile = useIsMobile();
+  const restartCamera = useCallback(() => {
+    const old = autoRef.current;
+    autoRef.current = null;
+    old?.destroy();
 
-  useEffect(() => {
     const apiKey = import.meta.env.VITE_GEMINI_API_KEY as string | undefined;
-
     const auto = new GestureUI5Auto({
       geminiKey: apiKey || undefined,
-      onVoiceNavigate: (pageId, _pageName) => {
+      onVoiceNavigate: (pageId) => {
         const resolved = resolvePage(pageId);
-        if (resolved) {
-          setTimeout(() => setPage(resolved), 100);
-        }
+        if (resolved) setTimeout(() => setPage(resolved), 100);
         return false;
       },
     });
@@ -88,10 +88,14 @@ export default function App() {
     eng.on("ready",  () => setStatus("ready"));
     eng.on("error",  () => setStatus("error"));
     eng.on("change", (e) => setGesture(e.detail.gesture));
-    eng.on("cursor", (e) => setFps((e.detail as any).fps ?? fps));
+    eng.on("cursor", (e) => setFps((e.detail as any).fps ?? 0));
 
     setStatus("loading");
     auto.init().catch(() => setStatus("error"));
+  }, []);
+
+  useEffect(() => {
+    restartCamera();
 
     const onPalm = () => setPage("overview");
     document.addEventListener("gesture:palm", onPalm);
@@ -104,7 +108,7 @@ export default function App() {
     document.addEventListener("gesture:voice:navigate", onVoiceNav);
 
     return () => {
-      auto.destroy();
+      autoRef.current?.destroy();
       autoRef.current = null;
       document.removeEventListener("gesture:palm", onPalm);
       document.removeEventListener("gesture:voice:navigate", onVoiceNav);
@@ -156,24 +160,41 @@ export default function App() {
 
         <div style={{ flex: 1 }} />
 
-        {/* Gesture status */}
-        <div style={{
-          display: "flex", alignItems: "center", gap: 5,
-          background: isActive ? "rgba(16,126,62,.25)" : status === "loading" ? "rgba(233,115,12,.25)" : "rgba(255,255,255,.1)",
-          border: `1px solid ${isActive ? "#107e3e" : status === "loading" ? "#e9730c" : "#444"}`,
-          borderRadius: 14, padding: isMobile ? "3px 8px" : "3px 12px", fontSize: isMobile ? 11 : 12,
-        }}>
-          <div style={{ width: 7, height: 7, borderRadius: "50%",
-            background: isActive ? "#4caf50" : status === "loading" ? "#ff9800" : "#666",
-            animation: status === "loading" ? "pulse 1s ease-in-out infinite" : undefined,
-            flexShrink: 0,
-          }} />
-          {!isMobile && (
-            <span style={{ color: isActive ? "#a5d6a7" : status === "loading" ? "#ffcc80" : "#aaa" }}>
-              {status === "loading" ? "Loading…" : isActive ? "Gesture Active" : "Gesture Off"}
-            </span>
-          )}
-        </div>
+        {/* Gesture status / restart */}
+        {status === "error" ? (
+          <button
+            onClick={restartCamera}
+            style={{
+              display: "flex", alignItems: "center", gap: 5,
+              background: "rgba(183,28,28,.3)", border: "1px solid #ef9a9a",
+              borderRadius: 14, padding: isMobile ? "3px 8px" : "3px 12px",
+              fontSize: isMobile ? 11 : 12, color: "#ef9a9a", cursor: "pointer",
+              fontFamily: "inherit",
+            }}
+            title="Camera stopped — tap to restart"
+          >
+            <span>📷</span>
+            {!isMobile && <span>Restart Camera</span>}
+          </button>
+        ) : (
+          <div style={{
+            display: "flex", alignItems: "center", gap: 5,
+            background: isActive ? "rgba(16,126,62,.25)" : status === "loading" ? "rgba(233,115,12,.25)" : "rgba(255,255,255,.1)",
+            border: `1px solid ${isActive ? "#107e3e" : status === "loading" ? "#e9730c" : "#444"}`,
+            borderRadius: 14, padding: isMobile ? "3px 8px" : "3px 12px", fontSize: isMobile ? 11 : 12,
+          }}>
+            <div style={{ width: 7, height: 7, borderRadius: "50%",
+              background: isActive ? "#4caf50" : status === "loading" ? "#ff9800" : "#666",
+              animation: status === "loading" ? "pulse 1s ease-in-out infinite" : undefined,
+              flexShrink: 0,
+            }} />
+            {!isMobile && (
+              <span style={{ color: isActive ? "#a5d6a7" : status === "loading" ? "#ffcc80" : "#aaa" }}>
+                {status === "loading" ? "Loading…" : isActive ? "Gesture Active" : "Gesture Off"}
+              </span>
+            )}
+          </div>
+        )}
 
         {isActive && gesture !== "NONE" && !isMobile && (
           <div style={{ background: "rgba(0,112,242,.3)", border: "1px solid #0070f2", borderRadius: 14, padding: "3px 12px", fontSize: 12, color: "#90caf9" }}>
