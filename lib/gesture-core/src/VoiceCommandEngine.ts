@@ -34,7 +34,7 @@ export interface VoiceCommandOptions {
 type EngineState = "idle" | "listening" | "processing";
 
 export class VoiceCommandEngine {
-  private opts: Required<VoiceCommandOptions>;
+  private opts: Required<Omit<VoiceCommandOptions, "getPages">> & { getPages?: () => VoicePage[] };
   private panel: HTMLDivElement;
   private micBtn: HTMLButtonElement;
   private styleEl: HTMLStyleElement;
@@ -55,6 +55,7 @@ export class VoiceCommandEngine {
     this.opts = {
       geminiApiKey: options.geminiApiKey,
       pages: options.pages ?? [],
+      getPages: options.getPages,
       getCurrentPage: options.getCurrentPage ?? (() => "unknown"),
       onAction: options.onAction ?? (() => {}),
       triggerKey: options.triggerKey ?? "`",

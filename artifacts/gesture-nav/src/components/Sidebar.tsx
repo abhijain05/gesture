@@ -1,6 +1,7 @@
 import { useLocation } from "wouter";
 import { useGestureContext } from "@/context/GestureContext";
 import { useGestureNavigation } from "@/hooks/useGestureNavigation";
+import { useVoiceCommands } from "@/hooks/useVoiceCommands";
 import {
   Home,
   LayoutDashboard,
@@ -23,6 +24,7 @@ export function Sidebar() {
   const [location, navigate] = useLocation();
   const { hoveredNavItem, currentGesture } = useGestureContext();
   useGestureNavigation();
+  useVoiceCommands();
 
   return (
     <aside
@@ -74,6 +76,7 @@ export function Sidebar() {
             <button
               key={id}
               data-nav-id={id}
+              data-gesture-nav={label}
               data-testid={`nav-item-${id}`}
               onClick={() => navigate(path)}
               className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left relative transition-all duration-200 cursor-pointer"

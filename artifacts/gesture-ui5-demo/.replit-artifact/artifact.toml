@@ -1,5 +1,5 @@
 kind = "web"
-previewPath = "/gesture-ui5-demo/"
+previewPath = "/"
 title = "Gesture UI5 Demo"
 version = "1.0.0"
 id = "artifacts/gesture-ui5-demo"
@@ -11,7 +11,7 @@ version = "1.0.0"
 
 [[services]]
 name = "web"
-paths = [ "/gesture-ui5-demo/" ]
+paths = [ "/" ]
 localPort = 3000
 
 [services.development]
@@ -28,4 +28,4 @@ to = "/index.html"
 
 [services.env]
 PORT = "3000"
-BASE_PATH = "/gesture-ui5-demo/"
+BASE_PATH = "/"

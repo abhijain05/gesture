@@ -32,18 +32,35 @@ const GESTURE_LABEL: Record<string, string> = {
 const ID_ALIAS: Record<string, Page> = {
   "sales-orders":      "orders",
   "salesorders":       "orders",
+  "sales-order":       "orders",
+  "salesorder":        "orders",
   "orders":            "orders",
+  "order":             "orders",
   "integration-guide": "integration",
   "integrationguide":  "integration",
   "integration":       "integration",
   "overview":          "overview",
+  "home":              "overview",
+  "main":              "overview",
   "products":          "products",
+  "product":           "products",
   "reports":           "reports",
+  "report":            "reports",
+  "report-tab":        "reports",
+  "reporting":         "reports",
 };
 
 function resolvePage(raw: string): Page | null {
   const key = raw.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z-]/g, "");
-  return ID_ALIAS[key] ?? null;
+  if (ID_ALIAS[key]) return ID_ALIAS[key];
+
+  const keyStripped = key.replace(/-/g, "");
+  for (const [alias, page] of Object.entries(ID_ALIAS)) {
+    const aliasStripped = alias.replace(/-/g, "");
+    if (aliasStripped === keyStripped) return page;
+    if (aliasStripped.startsWith(keyStripped) || keyStripped.startsWith(aliasStripped)) return page;
+  }
+  return null;
 }
 
 export default function App() {
