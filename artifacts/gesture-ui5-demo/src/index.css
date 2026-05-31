@@ -76,6 +76,7 @@
   border: 1px solid transparent;
   transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
   user-select: none;
+  white-space: nowrap;
 }
 .sap-btn-primary {
   background: var(--sap-blue);
@@ -111,6 +112,47 @@
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.02em;
+}
+
+/* ── Responsive grid helpers ─────────────────────── */
+.grid-kpi-4 {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+.grid-kpi-2 {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+.grid-products {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+
+@media (max-width: 900px) {
+  .grid-kpi-4 { grid-template-columns: repeat(2, 1fr); gap: 12px; }
+  .grid-products { grid-template-columns: repeat(2, 1fr); gap: 12px; }
+}
+@media (max-width: 480px) {
+  .grid-kpi-4 { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .grid-kpi-2 { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .grid-products { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+}
+
+/* ── Scrollable table wrapper ──────────────────── */
+.table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ── Mobile page padding ───────────────────────── */
+@media (max-width: 767px) {
+  .page-pad { padding: 12px; }
+}
+@media (min-width: 768px) {
+  .page-pad { padding: 24px; }
 }
 
 .scrollbar-thin::-webkit-scrollbar { width: 6px; }

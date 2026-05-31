@@ -17,6 +17,13 @@ export interface GestureUI5AutoOptions {
   audioFeedback?: boolean;
   /** Virtual keyboard for text inputs. Default true */
   virtualKeyboard?: boolean;
+  /**
+   * Words that activate the microphone without a button click.
+   * Default: ["tarang"]. Users can also change this in the settings panel.
+   */
+  wakeWords?: string[];
+  /** Show the ⚙️ settings gear button. Default: true */
+  showVoiceSettings?: boolean;
   /** Extra options forwarded to VoiceCommandEngine */
   voiceOptions?: Partial<Omit<VoiceCommandOptions, "geminiApiKey" | "pages" | "getPages" | "getCurrentPage" | "onAction">>;
   /** Called when a voice navigate action fires (use to control your router).
@@ -99,6 +106,8 @@ export class GestureUI5Auto {
           }
         },
 
+        wakeWords: options.wakeWords ?? ["tarang"],
+        showSettings: options.showVoiceSettings ?? true,
         ...options.voiceOptions,
       });
     }

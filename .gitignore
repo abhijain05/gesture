@@ -47,3 +47,13 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+
+# ── Deprecated artifacts (source kept, heavy dirs excluded) ──────────────
+artifacts/gesture-nav/node_modules/
+artifacts/gesture-nav/dist/
+
+# ── Extra ignores ─────────────────────────────────────────────────────────
+*.log
+pnpm-debug.log*
+replit.nix
+.replit.nix
