@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { GestureUI5Auto } from "@workspace/gesture-ui5";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useWakeWord } from "@/hooks/useWakeWord";
 import Overview from "@/pages/Overview";
 import SalesOrders from "@/pages/SalesOrders";
 import Products from "@/pages/Products";
@@ -64,11 +65,36 @@ export default function App() {
   const [gesture, setGesture]   = useState<string>("NONE");
   const [fps, setFps]           = useState(0);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const autoRef = useRef<GestureUI5Auto | null>(null);
-  const pageRef = useRef<Page>(page);
+  const [wakeSettingsOpen, setWakeSettingsOpen] = useState(false);
+  const [newWord, setNewWord]   = useState("");
+  const autoRef  = useRef<GestureUI5Auto | null>(null);
+  const pageRef  = useRef<Page>(page);
   pageRef.current = page;
   const isMobile = useIsMobile();
 
+  // ── Wake word hook (works without Gemini) ────────────────────────────
+  const handleVoiceCommand = (transcript: string) => {
+    const resolved = resolvePage(transcript);
+    if (resolved) setPage(resolved);
+  };
+
+  const { words, state: wakeState, supported: wakeSupported, addWord, removeWord } = useWakeWord(handleVoiceCommand);
+
+  const wakeStateLabel: Record<typeof wakeState, string> = {
+    "inactive":          "Wake word off",
+    "listening-wake":    `Say "${words[0] ?? "tarang"}"`,
+    "listening-command": "Listening…",
+    "processing":        "Processing…",
+  };
+
+  const wakeStateColor: Record<typeof wakeState, string> = {
+    "inactive":          "#666",
+    "listening-wake":    "#4caf50",
+    "listening-command": "#0070f2",
+    "processing":        "#ff9800",
+  };
+
+  // ── Gesture engine ────────────────────────────────────────────────────
   useEffect(() => {
     const apiKey = import.meta.env.VITE_GEMINI_API_KEY as string | undefined;
 
@@ -76,9 +102,7 @@ export default function App() {
       geminiKey: apiKey || undefined,
       onVoiceNavigate: (pageId, _pageName) => {
         const resolved = resolvePage(pageId);
-        if (resolved) {
-          setTimeout(() => setPage(resolved), 100);
-        }
+        if (resolved) setTimeout(() => setPage(resolved), 100);
         return false;
       },
     });
@@ -119,8 +143,133 @@ export default function App() {
     setMobileNavOpen(false);
   };
 
+  const isListeningCommand = wakeState === "listening-command";
+  const isProcessing       = wakeState === "processing";
+
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100dvh", fontFamily: '"72", "72full", Arial, Helvetica, sans-serif', overflow: "hidden" }}>
+
+      {/* ── Listening overlay ──────────────────────────────────────── */}
+      {(isListeningCommand || isProcessing) && (
+        <div style={{
+          position: "fixed", inset: 0, zIndex: 9999,
+          background: "rgba(0,0,0,0.55)", display: "flex", flexDirection: "column",
+          alignItems: "center", justifyContent: "center", gap: 20,
+        }}>
+          <div style={{
+            background: "#fff", borderRadius: 18, padding: "32px 48px",
+            display: "flex", flexDirection: "column", alignItems: "center", gap: 14,
+            boxShadow: "0 20px 60px rgba(0,0,0,0.4)",
+          }}>
+            <div style={{ fontSize: 48 }}>{isListeningCommand ? "🎤" : "⚙️"}</div>
+            <div style={{ fontSize: 22, fontWeight: 700, color: "#1d2d3e" }}>
+              {isListeningCommand ? "Listening…" : "Processing…"}
+            </div>
+            <div style={{ fontSize: 14, color: "#6a6d70", textAlign: "center" }}>
+              {isListeningCommand
+                ? 'Say a page name, e.g. "Overview", "Reports"'
+                : "Interpreting your command"}
+            </div>
+            {isListeningCommand && (
+              <div style={{ display: "flex", gap: 4, alignItems: "flex-end", height: 32 }}>
+                {[1,2,3,4,5].map((i) => (
+                  <div key={i} style={{
+                    width: 6, background: "#0070f2", borderRadius: 3,
+                    animation: `waveBar 0.8s ease-in-out ${i * 0.1}s infinite alternate`,
+                    minHeight: 8,
+                  }} />
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Wake word settings modal ───────────────────────────────── */}
+      {wakeSettingsOpen && (
+        <div
+          onClick={() => setWakeSettingsOpen(false)}
+          style={{ position: "fixed", inset: 0, zIndex: 8000, background: "rgba(0,0,0,0.4)" }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              position: "absolute", top: "50%", left: "50%",
+              transform: "translate(-50%,-50%)",
+              background: "#fff", borderRadius: 14, padding: "28px 32px",
+              width: 380, maxWidth: "90vw",
+              boxShadow: "0 16px 48px rgba(0,0,0,0.25)",
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+              <span style={{ fontSize: 17, fontWeight: 700, color: "#1d2d3e" }}>🎤 Wake Words</span>
+              <button
+                onClick={() => setWakeSettingsOpen(false)}
+                style={{ background: "none", border: "none", fontSize: 18, cursor: "pointer", color: "#666", lineHeight: 1 }}
+              >✕</button>
+            </div>
+
+            <p style={{ fontSize: 13, color: "#6a6d70", margin: "0 0 16px" }}>
+              Say any of these words to start voice navigation — no button click needed.
+            </p>
+
+            {/* Current words */}
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 16 }}>
+              {words.map((w) => (
+                <div key={w} style={{
+                  display: "flex", alignItems: "center", gap: 6,
+                  background: "#e8f0fe", borderRadius: 20, padding: "5px 12px 5px 14px",
+                  fontSize: 13, color: "#0070f2", fontWeight: 600,
+                }}>
+                  {w}
+                  <button
+                    onClick={() => removeWord(w)}
+                    style={{
+                      background: "rgba(0,112,242,0.15)", border: "none", borderRadius: "50%",
+                      width: 18, height: 18, cursor: "pointer", fontSize: 11, color: "#0070f2",
+                      display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1,
+                    }}
+                    title="Remove"
+                  >✕</button>
+                </div>
+              ))}
+            </div>
+
+            {/* Add new word */}
+            <div style={{ display: "flex", gap: 8 }}>
+              <input
+                value={newWord}
+                onChange={(e) => setNewWord(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && newWord.trim()) {
+                    addWord(newWord);
+                    setNewWord("");
+                  }
+                }}
+                placeholder="Add wake word…"
+                style={{
+                  flex: 1, border: "1.5px solid #d0d7e3", borderRadius: 8,
+                  padding: "8px 12px", fontSize: 13, outline: "none",
+                  color: "#1d2d3e",
+                }}
+              />
+              <button
+                onClick={() => { if (newWord.trim()) { addWord(newWord); setNewWord(""); } }}
+                style={{
+                  background: "#0070f2", color: "#fff", border: "none", borderRadius: 8,
+                  padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer",
+                }}
+              >Add</button>
+            </div>
+
+            {!wakeSupported && (
+              <p style={{ fontSize: 12, color: "#e9730c", marginTop: 14 }}>
+                ⚠️ Speech recognition is not supported in this browser. Use Chrome or Edge.
+              </p>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* ── SAP Shell Header ─────────────────────────────────────── */}
       <header style={{
@@ -181,13 +330,42 @@ export default function App() {
           </div>
         )}
 
+        {/* Wake word status badge — always shown when supported */}
+        {wakeSupported && (
+          <button
+            onClick={() => setWakeSettingsOpen(true)}
+            title={`Wake words: ${words.join(", ")} — click to manage`}
+            style={{
+              display: "flex", alignItems: "center", gap: 5,
+              background: wakeState !== "inactive" ? "rgba(0,112,242,.2)" : "rgba(255,255,255,.07)",
+              border: `1px solid ${wakeStateColor[wakeState]}`,
+              borderRadius: 14, padding: isMobile ? "3px 8px" : "3px 12px",
+              fontSize: isMobile ? 11 : 12, cursor: "pointer", color: "#fff",
+              transition: "all .2s",
+            }}
+          >
+            <div style={{
+              width: 7, height: 7, borderRadius: "50%",
+              background: wakeStateColor[wakeState],
+              animation: wakeState === "listening-wake" ? "pulse 2s ease-in-out infinite" : wakeState === "listening-command" ? "pulse 0.5s ease-in-out infinite" : undefined,
+              flexShrink: 0,
+            }} />
+            {!isMobile && (
+              <span style={{ color: wakeStateColor[wakeState] }}>
+                {wakeStateLabel[wakeState]}
+              </span>
+            )}
+            <span style={{ fontSize: 10, opacity: 0.6 }}>⚙️</span>
+          </button>
+        )}
+
         {hasVoice && !isMobile && (
           <div style={{
             display: "flex", alignItems: "center", gap: 5,
             background: "rgba(255,255,255,.07)", border: "1px solid rgba(255,255,255,.15)",
             borderRadius: 14, padding: "3px 10px", fontSize: 11, color: "#aaa",
           }}>
-            🎤 <span>Press <kbd style={{ background: "rgba(255,255,255,.12)", borderRadius: 3, padding: "1px 4px", fontSize: 10 }}>`</kbd> for voice</span>
+            🎤 <span>Press <kbd style={{ background: "rgba(255,255,255,.12)", borderRadius: 3, padding: "1px 4px", fontSize: 10 }}>`</kbd> for AI voice</span>
           </div>
         )}
 
@@ -299,6 +477,39 @@ export default function App() {
                 <StatusRow label="Gesture" value={gesture === "NONE" ? "—" : gesture.replace(/_/g, " ")} />
                 <StatusRow label="FPS" value={String(fps)} />
               </>}
+
+              {/* Wake word status in sidebar */}
+              {wakeSupported && (
+                <div style={{ borderTop: "1px solid #eee", paddingTop: 6, marginTop: 4 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "#6a6d70", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                    Wake Words
+                  </div>
+                  <StatusRow
+                    label="Status"
+                    value={wakeState === "listening-wake" ? "Listening" : wakeState === "listening-command" ? "Activated!" : wakeState === "processing" ? "Processing" : "Off"}
+                    valueColor={wakeStateColor[wakeState]}
+                  />
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 4 }}>
+                    {words.map((w) => (
+                      <span key={w} style={{
+                        background: "#e8f0fe", borderRadius: 10, padding: "2px 8px",
+                        fontSize: 11, color: "#0070f2", fontWeight: 600,
+                      }}>{w}</span>
+                    ))}
+                  </div>
+                  <button
+                    onClick={() => setWakeSettingsOpen(true)}
+                    style={{
+                      marginTop: 6, fontSize: 11, color: "#0070f2",
+                      background: "none", border: "none", cursor: "pointer",
+                      padding: 0, textDecoration: "underline",
+                    }}
+                  >
+                    + Add / edit words
+                  </button>
+                </div>
+              )}
+
               {hasVoice && (
                 <div style={{ fontSize: 11, color: "#888", borderTop: "1px solid #eee", paddingTop: 6, marginTop: 4, display: "flex", gap: 5, alignItems: "center" }}>
                   🎤 <span>Press <b>`</b> or click mic</span>
@@ -373,6 +584,10 @@ export default function App() {
       <style>{`
         @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
         @keyframes slideIn { from{transform:translateX(-100%)} to{transform:translateX(0)} }
+        @keyframes waveBar {
+          from { height: 8px; }
+          to   { height: 28px; }
+        }
       `}</style>
     </div>
   );
