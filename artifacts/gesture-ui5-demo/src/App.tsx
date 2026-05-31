@@ -135,6 +135,7 @@ export default function App() {
         zIndex: 200,
         boxShadow: "0 2px 8px rgba(0,0,0,0.3)",
       }}>
+        {/* Mobile hamburger */}
         {isMobile && (
           <button
             onClick={() => setMobileNavOpen((o) => !o)}
@@ -162,8 +163,7 @@ export default function App() {
           border: `1px solid ${isActive ? "#107e3e" : status === "loading" ? "#e9730c" : "#444"}`,
           borderRadius: 14, padding: isMobile ? "3px 8px" : "3px 12px", fontSize: isMobile ? 11 : 12,
         }}>
-          <div style={{
-            width: 7, height: 7, borderRadius: "50%",
+          <div style={{ width: 7, height: 7, borderRadius: "50%",
             background: isActive ? "#4caf50" : status === "loading" ? "#ff9800" : "#666",
             animation: status === "loading" ? "pulse 1s ease-in-out infinite" : undefined,
             flexShrink: 0,
@@ -203,7 +203,7 @@ export default function App() {
         </div>
       </header>
 
-      {/* ── Mobile slide-in drawer ───────────────────────────────── */}
+      {/* ── Mobile slide-in drawer overlay ─────────────────────── */}
       {isMobile && mobileNavOpen && (
         <>
           <div
@@ -257,7 +257,7 @@ export default function App() {
 
       <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
 
-        {/* ── Desktop Left Navigation ──────────────────────────────── */}
+        {/* ── Desktop Left Navigation ─────────────────────────────── */}
         {!isMobile && (
           <nav style={{ width: 220, background: "#fff", borderRight: "1px solid #d9d9d9", display: "flex", flexDirection: "column", flexShrink: 0 }}>
             <div style={{ padding: "12px 16px 8px", fontSize: 11, fontWeight: 700, color: "#6a6d70", letterSpacing: "0.08em", textTransform: "uppercase", borderBottom: "1px solid #f0f0f0" }}>
