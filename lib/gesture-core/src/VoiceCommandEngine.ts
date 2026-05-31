@@ -685,7 +685,7 @@ Return ONLY valid JSON, no markdown, no explanation:
       /* ── Mic button ───────────────────────────────── */
       .vce-mic-btn {
         position: fixed;
-        bottom: 76px;
+        bottom: 148px;
         right: 20px;
         width: 52px;
         height: 52px;
@@ -698,12 +698,11 @@ Return ONLY valid JSON, no markdown, no explanation:
         display: flex;
         align-items: center;
         justify-content: center;
-        z-index: 9000;
+        z-index: 2147483647;
         box-shadow: 0 4px 20px rgba(0,0,0,0.45);
         transition: transform .15s, background .15s;
         outline: none;
         user-select: none;
-        position: fixed;
       }
       .vce-mic-btn:hover { transform: scale(1.1); background: #253d54; }
       .vce-mic-btn--listening {
@@ -730,7 +729,7 @@ Return ONLY valid JSON, no markdown, no explanation:
       /* ── Gear button ─────────────────────────────── */
       .vce-gear-btn {
         position: fixed;
-        bottom: 136px;
+        bottom: 210px;
         right: 20px;
         width: 36px;
         height: 36px;
@@ -743,7 +742,7 @@ Return ONLY valid JSON, no markdown, no explanation:
         display: flex;
         align-items: center;
         justify-content: center;
-        z-index: 9000;
+        z-index: 2147483647;
         box-shadow: 0 2px 12px rgba(0,0,0,0.3);
         transition: transform .2s, background .15s;
         outline: none;
@@ -754,14 +753,14 @@ Return ONLY valid JSON, no markdown, no explanation:
       /* ── Main voice panel ────────────────────────── */
       .vce-panel {
         position: fixed;
-        bottom: 136px;
+        bottom: 210px;
         right: 20px;
         width: 300px;
         background: #1a2a3a;
         border: 1.5px solid #0070f2;
         border-radius: 14px;
         padding: 14px 16px;
-        z-index: 9001;
+        z-index: 2147483647;
         box-shadow: 0 12px 40px rgba(0,0,0,0.55);
         color: #e0eaff;
         font-family: "72", Arial, Helvetica, sans-serif;
