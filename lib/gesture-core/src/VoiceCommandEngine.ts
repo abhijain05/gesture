@@ -109,8 +109,8 @@ export class VoiceCommandEngine {
     };
     document.addEventListener("keydown", this.keyHandler);
 
-    // Start background wake word listener
-    this.startWakeWordListener();
+    // Wake word listener starts lazily after first successful mic session
+    // (not in constructor — avoids triggering mic permission without user gesture)
   }
 
   toggle() {
@@ -127,8 +127,8 @@ export class VoiceCommandEngine {
     try {
       this.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     } catch {
-      this.showError("Microphone access denied");
-      this.resumeWakeWordListener();
+      this.showError("Microphone access denied — check browser permissions for this site");
+      if (this.wakeRec) this.resumeWakeWordListener(); else this.startWakeWordListener();
       return;
     }
 
@@ -572,7 +572,9 @@ Return ONLY valid JSON, no markdown, no explanation:
   private resetState() {
     this.state = "idle";
     this.setMicBtn("idle");
-    this.resumeWakeWordListener();
+    // Start or restart wake word listener — now safe because user already granted mic
+    if (this.wakeRec) this.resumeWakeWordListener();
+    else this.startWakeWordListener();
   }
 
   private buildPanel(): HTMLDivElement {
