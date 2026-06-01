@@ -72,6 +72,8 @@ export class HandTracker {
       });
       this.video.srcObject = this.stream;
       this.video.playsInline = true;
+      this.video.muted = true;
+      this.video.autoplay = true;
       await this.video.play();
       this.isRunning = true;
       this.loop();

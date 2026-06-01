@@ -442,7 +442,7 @@ export class GestureEngine {
         this.emit("dwell", { x, y, target: dwellEl, progress: 1 });
         const label = (dwellEl as HTMLElement).textContent?.trim().slice(0, 28) || "element";
         this.toast?.show("⏱", `Activated: ${label}`);
-        (dwellEl as HTMLElement).click?.();
+        this.fireClick(dwellEl as HTMLElement, x, y);
         this.dwellStart = null;
         this.overlay?.setDwellProgress(0);
       } else {
@@ -477,11 +477,38 @@ export class GestureEngine {
         el.hasAttribute("data-gesture-click") ||
         el.onclick !== null
       ) {
-        el.click();
-        el.focus?.();
+        this.fireClick(el, x, y);
         return;
       }
       el = el.parentElement;
     }
+  }
+
+  /**
+   * Dispatch a full pointer → mouse → click event sequence on the target.
+   * Plain el.click() is not enough for SAP UI5 and other frameworks that
+   * use pointerdown/pointerup listeners instead of (or in addition to) click.
+   */
+  private fireClick(el: HTMLElement, x: number, y: number): void {
+    const shared: MouseEventInit = {
+      bubbles: true, cancelable: true, view: window,
+      clientX: x, clientY: y, screenX: x, screenY: y,
+      button: 0, buttons: 1,
+    };
+    const pShared: PointerEventInit = {
+      ...shared, pointerId: 1, pointerType: "mouse",
+      isPrimary: true, width: 1, height: 1,
+    };
+
+    el.dispatchEvent(new PointerEvent("pointerover",  { ...pShared, pressure: 0 }));
+    el.dispatchEvent(new MouseEvent ("mouseover",  shared));
+    el.dispatchEvent(new PointerEvent("pointerdown", { ...pShared, pressure: 0.5 }));
+    el.dispatchEvent(new MouseEvent ("mousedown",  { ...shared, buttons: 1 }));
+    el.focus?.();
+    el.dispatchEvent(new PointerEvent("pointerup",   { ...pShared, pressure: 0, buttons: 0 }));
+    el.dispatchEvent(new MouseEvent ("mouseup",   { ...shared, buttons: 0 }));
+    el.dispatchEvent(new MouseEvent ("click",     { ...shared, buttons: 0 }));
+    el.dispatchEvent(new PointerEvent("pointerout",  { ...pShared, pressure: 0 }));
+    el.dispatchEvent(new MouseEvent ("mouseout",  shared));
   }
 }
