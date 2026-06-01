@@ -774,8 +774,6 @@ Return ONLY valid JSON, no markdown, no explanation:
         font-size: 13px !important;
         box-sizing: border-box !important;
         overflow: hidden !important;
-        flex-direction: column !important;
-        display: block !important;
         margin: 0 !important;
         animation: vce-up .2s ease;
       }
@@ -834,7 +832,6 @@ Return ONLY valid JSON, no markdown, no explanation:
         font-size: 13px !important;
         box-sizing: border-box !important;
         margin: 0 !important;
-        display: block !important;
         animation: vce-up .2s ease;
       }
       .vce-set-header {
